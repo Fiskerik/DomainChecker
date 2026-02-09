@@ -1,0 +1,23 @@
+# Miljövariabler (Viktigast för säkerhet)
+.env
+.env.local
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Beroenden
+node_modules/
+
+# Next.js byggfiler
+.next/
+out/
+
+# Operativsystem-filer
+.DS_Store
+Thumbs.db
+
+# Loggar
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
