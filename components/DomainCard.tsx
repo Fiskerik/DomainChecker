@@ -3,11 +3,15 @@
 import { useState } from 'react';
 import { Heart } from 'lucide-react';
 
-export default function DomainCard({ domain, isInitiallyFavorited = false }) {
+export default function DomainCard({ domain, isInitiallyFavorited = false }: { domain: any, isInitiallyFavorited?: boolean }) {
   const [isFavorited, setIsFavorited] = useState(isInitiallyFavorited);
 
+  const daysUntilDrop = Math.floor(
+    (new Date(domain.estimated_drop_date).getTime() - Date.now()) / (1000 * 3600 * 24)
+  );
+
   const toggleFavorite = async () => {
-    const res = await fetch('/api/favorites/toggle', {
+    const res = await fetch('/api/favourites/toggle', { // Notera: 'favourites' matchar din mappstruktur i Bild 4
       method: 'POST',
       body: JSON.stringify({ domainId: domain.id }),
     });
@@ -21,8 +25,8 @@ export default function DomainCard({ domain, isInitiallyFavorited = false }) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition-all group">
-      <div className="h-32 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-4">
-        <span className="text-white font-bold text-xl break-all px-2 text-center">{domain.domain_name}</span>
+      <div className="h-32 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 text-center px-2">
+        <span className="text-white font-bold text-lg break-all">{domain.domain_name}</span>
       </div>
       
       <div className="flex justify-between items-center mb-2">
@@ -33,20 +37,16 @@ export default function DomainCard({ domain, isInitiallyFavorited = false }) {
       </div>
 
       <div className="flex gap-2 mt-4">
-        <button className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800">
+        <button className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors">
           Bevaka 🔔
         </button>
-        <button className="p-2 border rounded-lg hover:bg-gray-50">
-          <Heart size={18} className="text-gray-400 group-hover:text-red-500" />
+        <button 
+          onClick={toggleFavorite}
+          className={`p-2 border rounded-lg transition-colors ${isFavorited ? 'bg-red-50 border-red-200' : 'hover:bg-gray-50'}`}
+        >
+          <Heart size={18} className={isFavorited ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
         </button>
-     
-      <button 
-        onClick={toggleFavorite}
-        className={`p-2 border rounded-lg transition-colors ${isFavorited ? 'bg-red-50 border-red-200' : 'hover:bg-gray-50'}`}
-      >
-        <Heart size={18} className={isFavorited ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
-      </button>
+      </div>
     </div>
   );
 }
-
