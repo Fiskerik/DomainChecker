@@ -1,7 +1,23 @@
-import { Heart, ExternalLink } from 'lucide-react';
+'use client';
 
-export default function DomainCard({ domain }) {
-  const daysUntilDrop = Math.floor((new Date(domain.estimated_drop_date).getTime() - Date.now()) / (1000 * 3600 * 24));
+import { useState } from 'react';
+import { Heart } from 'lucide-react';
+
+export default function DomainCard({ domain, isInitiallyFavorited = false }) {
+  const [isFavorited, setIsFavorited] = useState(isInitiallyFavorited);
+
+  const toggleFavorite = async () => {
+    const res = await fetch('/api/favorites/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ domainId: domain.id }),
+    });
+    
+    if (res.ok) {
+      setIsFavorited(!isFavorited);
+    } else {
+      alert('Du måste vara inloggad för att spara domäner!');
+    }
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-md transition-all group">
@@ -23,7 +39,14 @@ export default function DomainCard({ domain }) {
         <button className="p-2 border rounded-lg hover:bg-gray-50">
           <Heart size={18} className="text-gray-400 group-hover:text-red-500" />
         </button>
-      </div>
+     
+      <button 
+        onClick={toggleFavorite}
+        className={`p-2 border rounded-lg transition-colors ${isFavorited ? 'bg-red-50 border-red-200' : 'hover:bg-gray-50'}`}
+      >
+        <Heart size={18} className={isFavorited ? 'text-red-500 fill-red-500' : 'text-gray-400'} />
+      </button>
     </div>
   );
 }
+
