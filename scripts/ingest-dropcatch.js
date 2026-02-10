@@ -30,7 +30,7 @@ const supabase = createClient(
 );
 
 
-const DROPCATCH_API_BASE = 'https://www.dropcatch.com/api/v1';
+
 
 
 async function getDropCatchToken() {
@@ -55,16 +55,11 @@ async function getDropCatchToken() {
 async function fetchDropCatchDomains() {
   console.log('🔍 Fetching domains from DropCatch API...\n');
 
-  if (!DROPCATCH_API_KEY) {
-    console.log('⚠️  DROPCATCH_API_KEY not found. Using mock data.\n');
-    return generateMockDomains();
-  }
+
 
   return new Promise((resolve, reject) => {
     const options = {
       hostname: 'www.dropcatch.com',
-      path: `/api/v1/domains?status=pending&limit=100&apikey=${DROPCATCH_API_KEY}`,
-      method: 'GET',
       headers: {
         'Accept': 'application/json',
       }
