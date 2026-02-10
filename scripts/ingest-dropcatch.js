@@ -16,6 +16,11 @@
  * - DROPCATCH_API_KEY
  */
 
+// Endast för lokal utveckling!
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const https = require('https');
 
@@ -24,12 +29,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const DROPCATCH_API_KEY = process.env.DROPCATCH_API_KEY;
+
 const DROPCATCH_API_BASE = 'https://www.dropcatch.com/api/v1';
+
+
+async function getDropCatchToken() {
+  // Här använder du dina credentials från .env
+  const clientId = process.env.DROPCATCH_CLIENT_ID; 
+  const clientSecret = process.env.DROPCATCH_CLIENT_SECRET;
+
+  // Se din bifogade bild för endpointen
+  const response = await axios.post('https://api.dropcatch.com/authorize', {
+    clientId: clientId,
+    clientSecret: clientSecret
+  });
+  
+  return response.data.token; // Detta är token du sen använder i dina anrop
+}
 
 /**
  * Fetch domains from DropCatch API
  */
+
+
 async function fetchDropCatchDomains() {
   console.log('🔍 Fetching domains from DropCatch API...\n');
 

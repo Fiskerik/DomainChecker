@@ -14,6 +14,7 @@
  * - DYNADOT_API_KEY
  */
 
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
