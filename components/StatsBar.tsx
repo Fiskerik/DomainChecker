@@ -1,7 +1,5 @@
 'use client';
 
-import { TrendingUp, Clock, Flame } from 'lucide-react';
-
 interface StatsBarProps {
   stats: {
     total_pending: number;
@@ -12,57 +10,38 @@ interface StatsBarProps {
 }
 
 export function StatsBar({ stats }: StatsBarProps) {
-  const topTLDs = stats.by_tld 
+  const topTLDs = stats.by_tld
     ? Object.entries(stats.by_tld)
-        .sort(([, a], [, b]) => b - a)
+        .sort(([, first], [, second]) => second - first)
         .slice(0, 3)
     : [];
 
   return (
-    <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+    <section className="border-b border-slate-200 bg-white">
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Total Pending */}
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 rounded-lg p-3">
-              <TrendingUp size={32} />
-            </div>
-            <div>
-              <p className="text-sm opacity-90">Total Pending Delete</p>
-              <p className="text-3xl font-bold">{stats.total_pending}</p>
-            </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-600">Total Pending Delete</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.total_pending}</p>
           </div>
 
-          {/* Hot Domains */}
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 rounded-lg p-3">
-              <Flame size={32} />
-            </div>
-            <div>
-              <p className="text-sm opacity-90">Hot Domains (70+ score)</p>
-              <p className="text-3xl font-bold">{stats.hot_domains}</p>
-            </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-600">High Interest Domains (70+)</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.hot_domains}</p>
           </div>
 
-          {/* Dropping This Week */}
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 rounded-lg p-3">
-              <Clock size={32} />
-            </div>
-            <div>
-              <p className="text-sm opacity-90">Dropping This Week</p>
-              <p className="text-3xl font-bold">{stats.dropping_this_week}</p>
-            </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-600">Dropping This Week</p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.dropping_this_week}</p>
           </div>
         </div>
 
-        {/* Top TLDs */}
         {topTLDs.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/20">
-            <p className="text-sm opacity-90 mb-2">Popular TLDs:</p>
-            <div className="flex gap-3">
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <p className="mb-2 text-sm text-slate-600">Top TLDs</p>
+            <div className="flex flex-wrap gap-2">
               {topTLDs.map(([tld, count]) => (
-                <span key={tld} className="bg-white/20 px-3 py-1 rounded-full text-sm">
+                <span key={tld} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
                   .{tld} ({count})
                 </span>
               ))}
@@ -70,6 +49,6 @@ export function StatsBar({ stats }: StatsBarProps) {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

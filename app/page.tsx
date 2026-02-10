@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DomainCard } from '@/components/DomainCard';
 import { FilterBar } from '@/components/FilterBar';
 import { StatsBar } from '@/components/StatsBar';
@@ -23,6 +23,8 @@ interface Filters {
   category?: string;
   min_score?: number;
   sort?: string;
+  search?: string;
+  order?: string;
 }
 
 export default function DomainsPage() {
@@ -31,12 +33,10 @@ export default function DomainsPage() {
   const [filters, setFilters] = useState<Filters>({});
   const [stats, setStats] = useState<any>(null);
 
-  // Fetch domains
   useEffect(() => {
     fetchDomains();
   }, [filters]);
 
-  // Fetch stats once
   useEffect(() => {
     fetchStats();
   }, []);
@@ -70,55 +70,75 @@ export default function DomainsPage() {
     }
   };
 
+  const groupedDomains = useMemo(() => {
+    const groups = new Map<string, Domain[]>();
+
+    domains.forEach((domain) => {
+      const parts = domain.domain_name.split('.');
+      const root = parts.length > 1 ? parts.slice(0, -1).join('.') : domain.domain_name;
+      const key = root.toLowerCase();
+
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+
+      groups.get(key)?.push(domain);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => {
+      const firstGroupScore = Math.max(...a.map((entry) => entry.popularity_score));
+      const secondGroupScore = Math.max(...b.map((entry) => entry.popularity_score));
+      return secondGroupScore - firstGroupScore;
+    });
+  }, [domains]);
+
   return (
-   
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            🎯 Premium Domains Dropping Soon
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+            Premium Domains Dropping Soon
           </h1>
-          <p className="text-gray-600 mt-2">
-            Discover valuable domains in the pending delete phase (5-15 days before drop)
+          <p className="mt-2 max-w-2xl text-slate-600">
+            Review pending delete domains, compare TLD variants, and act before they drop.
           </p>
         </div>
       </header>
 
-      {/* Stats Bar */}
       {stats && <StatsBar stats={stats} />}
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Filter Bar */}
-        <FilterBar 
-          filters={filters} 
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <FilterBar
+          filters={filters}
           onFilterChange={setFilters}
           onRefresh={fetchDomains}
         />
 
-        {/* Domain Grid */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-slate-900"></div>
           </div>
-        ) : domains.length === 0 ? (
+        ) : groupedDomains.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-500 text-lg">No domains found with current filters</p>
+            <p className="text-lg text-slate-500">No domains found with current filters.</p>
             <button
               onClick={() => setFilters({})}
-              className="mt-4 text-blue-600 hover:text-blue-700"
+              className="mt-4 text-slate-900 underline underline-offset-4"
             >
               Clear filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {domains.map((domain) => (
-              <DomainCard key={domain.id} domain={domain} />
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {groupedDomains.map((domainGroup) => (
+              <DomainCard
+                key={(domainGroup[0].domain_name.split('.').slice(0, -1).join('.') || domainGroup[0].domain_name).toLowerCase()}
+                domains={domainGroup}
+              />
             ))}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
