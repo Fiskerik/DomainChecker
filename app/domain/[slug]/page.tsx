@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import { Metadata } from 'next';
-import { getBackorderPrice, getEstimatedValue } from '@/lib/domain-utils';
+import { getBackorderPrice, getEstimatedValue, getNamecheapAffiliateUrl } from '@/lib/domain-utils';
 
 interface Domain {
   id: number;
@@ -102,7 +102,7 @@ export default async function DomainDetailPage({ params }: { params: { slug: str
   const similarDomains = allVariants.filter((entry) => entry.id !== currentDomain.id).slice(0, 4);
 
   const affiliateUrls = {
-    namecheap: `https://www.namecheap.com/domains/registration/results/?domain=${currentDomain.domain_name}&aff=${process.env.NEXT_PUBLIC_NAMECHEAP_AFF_ID || ''}`,
+    namecheap: getNamecheapAffiliateUrl(currentDomain.domain_name),
     snapnames: `https://www.snapnames.com/search?query=${currentDomain.domain_name}&aff=${process.env.NEXT_PUBLIC_SNAPNAMES_AFF_ID || ''}`,
   };
 

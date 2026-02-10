@@ -41,3 +41,16 @@ export function getDomainRoot(domainName: string): string {
 export function getBackorderPrice(provider: 'snapnames' | 'dropcatch'): string {
   return provider === 'snapnames' ? '$69' : '$59';
 }
+
+export function getNamecheapAffiliateUrl(domainName: string): string {
+  const searchUrl = `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domainName)}`;
+  const impactTemplate = process.env.NEXT_PUBLIC_NAMECHEAP_IMPACT_LINK_TEMPLATE;
+
+  if (impactTemplate) {
+    return impactTemplate
+      .replaceAll('{domain}', encodeURIComponent(domainName))
+      .replaceAll('{url}', encodeURIComponent(searchUrl));
+  }
+
+  return `${searchUrl}&aff=${process.env.NEXT_PUBLIC_NAMECHEAP_AFF_ID || ''}`;
+}
