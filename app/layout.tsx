@@ -5,8 +5,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
   title: 'DropWatch - Hitta utgående domäner',
-  description: 'Bevaka domäner i Pending Delete-stadiet',
-  impact-site-verification: 'ca0aaced-7984-4e30-a189-511ccce10bb0'
+  description: 'Bevaka domäner i Pending Delete-stadiet'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
