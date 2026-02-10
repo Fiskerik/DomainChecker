@@ -1,14 +1,8 @@
 name: Daily Domain Ingestion
 
-# This workflow runs automatically every day to fetch and update expiring domains
-# It also updates existing domain statuses and cleans up old data
-
 on:
-  # Run every day at 2 AM UTC (adjust timezone as needed)
   schedule:
     - cron: '0 2 * * *'
-  
-  # Allow manual triggering from GitHub UI
   workflow_dispatch:
     inputs:
       cleanup:
@@ -20,23 +14,19 @@ on:
 jobs:
   ingest-domains:
     runs-on: ubuntu-latest
-    
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      # Step 2: Setup Node.js environment
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      
-      # Step 3: Install dependencies
+          # cache: 'npm' är borttagen här
+
       - name: Install dependencies
-        run: npm install
+        run: npm install # Ändrat från 'npm ci'
       
-      # Step 4: Run domain ingestion script
       - name: Fetch and store domains
         run: node scripts/ingest-dropcatch.js
         env:
@@ -44,32 +34,18 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           WHOIS_API_KEY: ${{ secrets.WHOIS_API_KEY }}
           DROPCATCH_API_KEY: ${{ secrets.DROPCATCH_API_KEY }}
-      
-      # Step 5: Run cleanup if enabled
+
       - name: Cleanup old domains
         if: ${{ github.event.inputs.cleanup == 'true' || github.event_name == 'schedule' }}
         run: node scripts/cleanup.js
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      
-      # Step 6: Notify on failure (optional - requires Slack webhook)
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "❌ Domain ingestion failed!"
-          echo "Check the logs at: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-        # Optionally send to Slack/Discord/Email:
-        # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-        #   -H 'Content-Type: application/json' \
-        #   -d '{"text":"Domain ingestion failed! Check GitHub Actions."}'
 
-  # Optional: Generate daily report
   generate-report:
     runs-on: ubuntu-latest
     needs: ingest-domains
     if: success()
-    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -78,10 +54,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          
-      
+          # cache: 'npm' är borttagen även här
+
       - name: Install dependencies
-        run: npm install
+        run: npm install # Ändrat från 'npm ci'
       
       - name: Generate daily stats
         run: node scripts/daily-report.js
