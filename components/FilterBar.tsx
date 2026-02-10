@@ -91,6 +91,18 @@ export function FilterBar({ filters, onFilterChange, onRefresh }: FilterBarProps
             <option value="created_at">Recently Added</option>
           </select>
 
+          {/* Sort Order Toggle */}
+          <button
+            onClick={() => onFilterChange({ 
+              ...filters, 
+              order: filters.order === 'asc' ? 'desc' : 'asc' 
+            })}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors font-bold"
+            title={filters.order === 'asc' ? 'Ascending - Click for Descending' : 'Descending - Click for Ascending'}
+          >
+            {filters.order === 'asc' ? '↑ ASC' : '↓ DESC'}
+          </button>
+
           {/* Refresh Button */}
           <button
             onClick={handleRefresh}
