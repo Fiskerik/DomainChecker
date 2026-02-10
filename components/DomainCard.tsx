@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { getBackorderPrice, getDomainRoot, getEstimatedValue } from '@/lib/domain-utils';
 
 interface Domain {
   id: number;
@@ -29,39 +31,6 @@ export function DomainCard({ domains }: DomainCardProps) {
   );
 
   const domain = sortedDomains[selectedIndex] ?? sortedDomains[0];
-
-  const getEstimatedValue = () => {
-    const baseByTld: Record<string, { min: number; max: number }> = {
-      com: { min: 500, max: 2000 },
-      io: { min: 200, max: 1000 },
-      ai: { min: 300, max: 1500 },
-      org: { min: 150, max: 800 },
-      net: { min: 120, max: 700 },
-    };
-
-    const fallback = { min: 100, max: 500 };
-    const tldRange = baseByTld[domain.tld] ?? fallback;
-    const nameWithoutTld = domain.domain_name.replace(`.${domain.tld}`, '');
-    const length = nameWithoutTld.length;
-    const hasKeyword = /(shop|tech|ai|cloud|app|data|pay|crypto|dev)/i.test(nameWithoutTld);
-
-    const lengthMultiplier =
-      length <= 5 ? 1.6 :
-      length <= 8 ? 1.25 :
-      length <= 12 ? 1 :
-      0.75;
-
-    const keywordMultiplier = hasKeyword ? 1.2 : 1;
-
-    const min = Math.round(tldRange.min * lengthMultiplier * keywordMultiplier);
-    const max = Math.round(tldRange.max * lengthMultiplier * keywordMultiplier);
-
-    return `$${min.toLocaleString()}-$${max.toLocaleString()}`;
-  };
-
-  const getBackorderPrice = (provider: 'snapnames' | 'dropcatch') => {
-    return provider === 'snapnames' ? '$69' : '$59';
-  };
 
   const handleAffiliateClick = async (type: 'namecheap' | 'snapnames') => {
     setIsTracking(true);
@@ -104,6 +73,8 @@ export function DomainCard({ domains }: DomainCardProps) {
     domain.days_until_drop <= 5 ? 'text-red-700 bg-red-50 border-red-100' :
     domain.days_until_drop <= 10 ? 'text-amber-700 bg-amber-50 border-amber-100' :
     'text-emerald-700 bg-emerald-50 border-emerald-100';
+
+  const domainSlug = `${getDomainRoot(domain.domain_name)}-${domain.tld}`;
 
   return (
     <div className="relative pt-4">
@@ -191,7 +162,7 @@ export function DomainCard({ domains }: DomainCardProps) {
 
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
             <p className="text-sm font-medium text-amber-900">Estimated domain value</p>
-            <p className="mt-1 text-lg font-semibold text-amber-800">{getEstimatedValue()}</p>
+            <p className="mt-1 text-lg font-semibold text-amber-800">{getEstimatedValue(domain)}</p>
             <div className="mt-2 text-xs text-amber-700 flex flex-wrap gap-3">
               <span>SnapNames backorder: {getBackorderPrice('snapnames')}</span>
               <span>DropCatch backorder: {getBackorderPrice('dropcatch')}</span>
@@ -220,6 +191,14 @@ export function DomainCard({ domains }: DomainCardProps) {
             >
               Check on Namecheap
             </button>
+
+            <Link
+              href={`/domain/${domainSlug}`}
+              onClick={(event) => event.stopPropagation()}
+              className="block w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              View domain details
+            </Link>
           </div>
 
           {domain.registrar && (
