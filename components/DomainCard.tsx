@@ -23,6 +23,39 @@ interface DomainCardProps {
 export function DomainCard({ domain }: DomainCardProps) {
   const [isTracking, setIsTracking] = useState(false);
 
+  const getEstimatedValue = () => {
+    const baseByTld: Record<string, { min: number; max: number }> = {
+      com: { min: 500, max: 2000 },
+      io: { min: 200, max: 1000 },
+      ai: { min: 300, max: 1500 },
+      org: { min: 150, max: 800 },
+      net: { min: 120, max: 700 },
+    };
+
+    const fallback = { min: 100, max: 500 };
+    const tldRange = baseByTld[domain.tld] ?? fallback;
+    const nameWithoutTld = domain.domain_name.replace(`.${domain.tld}`, '');
+    const length = nameWithoutTld.length;
+    const hasKeyword = /(shop|tech|ai|cloud|app|data|pay|crypto|dev)/i.test(nameWithoutTld);
+
+    const lengthMultiplier =
+      length <= 5 ? 1.6 :
+      length <= 8 ? 1.25 :
+      length <= 12 ? 1 :
+      0.75;
+
+    const keywordMultiplier = hasKeyword ? 1.2 : 1;
+
+    const min = Math.round(tldRange.min * lengthMultiplier * keywordMultiplier);
+    const max = Math.round(tldRange.max * lengthMultiplier * keywordMultiplier);
+
+    return `$${min.toLocaleString()}-$${max.toLocaleString()}`;
+  };
+
+  const getBackorderPrice = (provider: 'snapnames' | 'dropcatch') => {
+    return provider === 'snapnames' ? '$69' : '$59';
+  };
+
   const handleAffiliateClick = async (type: 'namecheap' | 'snapnames') => {
     // Track the click
     setIsTracking(true);
@@ -153,6 +186,16 @@ export function DomainCard({ domain }: DomainCardProps) {
             )}
           </div>
         )}
+
+        {/* Price estimates */}
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+          <p className="text-sm font-semibold text-amber-900">Estimated domain value</p>
+          <p className="text-lg font-bold text-amber-800 mt-1">{getEstimatedValue()}</p>
+          <div className="mt-2 text-xs text-amber-700 flex flex-wrap gap-3">
+            <span>SnapNames backorder: {getBackorderPrice('snapnames')}</span>
+            <span>DropCatch backorder: {getBackorderPrice('dropcatch')}</span>
+          </div>
+        </div>
 
         {/* Action Buttons */}
         <div className="space-y-2">
