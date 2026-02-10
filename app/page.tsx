@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DomainCard } from '@/components/DomainCard';
 import { FilterBar } from '@/components/FilterBar';
 import { StatsBar } from '@/components/StatsBar';
+import { getDomainRoot } from '@/lib/domain-utils';
 
 interface Domain {
   id: number;
@@ -44,12 +45,16 @@ export default function DomainsPage() {
   const fetchDomains = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        status: 'pending_delete',
-        ...filters,
-      } as any);
+      const params = new URLSearchParams();
+      params.set('status', 'pending_delete');
 
-      const response = await fetch(`/api/domains?${params}`);
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.set(key, String(value));
+        }
+      });
+
+      const response = await fetch(`/api/domains?${params.toString()}`);
       const data = await response.json();
 
       setDomains(data.domains || []);
@@ -74,9 +79,7 @@ export default function DomainsPage() {
     const groups = new Map<string, Domain[]>();
 
     domains.forEach((domain) => {
-      const parts = domain.domain_name.split('.');
-      const root = parts.length > 1 ? parts.slice(0, -1).join('.') : domain.domain_name;
-      const key = root.toLowerCase();
+      const key = getDomainRoot(domain.domain_name);
 
       if (!groups.has(key)) {
         groups.set(key, []);
@@ -132,7 +135,7 @@ export default function DomainsPage() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {groupedDomains.map((domainGroup) => (
               <DomainCard
-                key={(domainGroup[0].domain_name.split('.').slice(0, -1).join('.') || domainGroup[0].domain_name).toLowerCase()}
+                key={getDomainRoot(domainGroup[0].domain_name)}
                 domains={domainGroup}
               />
             ))}
