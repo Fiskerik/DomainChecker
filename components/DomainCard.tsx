@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { getBackorderPrice, getDomainRoot, getEstimatedValue } from '@/lib/domain-utils';
+import { getBackorderPrice, getDomainRoot, getEstimatedValue, getNamecheapAffiliateUrl } from '@/lib/domain-utils';
 
 interface Domain {
   id: number;
@@ -50,7 +50,7 @@ export function DomainCard({ domains }: DomainCardProps) {
     }
 
     const affiliateUrls = {
-      namecheap: `https://www.namecheap.com/domains/registration/results/?domain=${domain.domain_name}&aff=${process.env.NEXT_PUBLIC_NAMECHEAP_AFF_ID || ''}`,
+      namecheap: getNamecheapAffiliateUrl(domain.domain_name),
       snapnames: `https://www.snapnames.com/search?query=${domain.domain_name}&aff=${process.env.NEXT_PUBLIC_SNAPNAMES_AFF_ID || ''}`,
     };
 
