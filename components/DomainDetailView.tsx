@@ -24,6 +24,7 @@ interface Domain {
   view_count: number;
   click_count_total: number;
   created_at: string;
+  slug: string;  // Added this
 }
 
 interface DomainDetailViewProps {
