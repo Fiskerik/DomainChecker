@@ -1,34 +1,95 @@
 /**
  * Domain utility functions
- * Helper functions for domain cards and pages
  */
 
+export interface DomainLike {
+  domain_name: string;
+  tld: string;
+  popularity_score: number;
+}
+
 /**
- * Get the domain root (everything before the TLD)
- * Example: "techstart.io" -> "techstart"
+ * Get estimated domain value
+ */
+export function getEstimatedValue(domain: DomainLike): string {
+  const baseByTld: Record<string, { min: number; max: number }> = {
+    com: { min: 500, max: 2000 },
+    io: { min: 200, max: 1000 },
+    ai: { min: 300, max: 1500 },
+    app: { min: 150, max: 800 },
+    dev: { min: 150, max: 700 },
+    co: { min: 200, max: 900 },
+    org: { min: 150, max: 800 },
+    net: { min: 120, max: 700 },
+  };
+  
+  const fallback = { min: 100, max: 500 };
+  const tldRange = baseByTld[domain.tld] ?? fallback;
+  const nameWithoutTld = domain.domain_name.replace(`.${domain.tld}`, '');
+  const length = nameWithoutTld.length;
+  const hasKeyword = /(shop|tech|ai|cloud|app|data|pay|crypto|dev|game|health)/i.test(nameWithoutTld);
+  
+  const lengthMultiplier =
+    length <= 5 ? 1.6 :
+    length <= 8 ? 1.25 :
+    length <= 12 ? 1 :
+    0.75;
+  
+  const keywordMultiplier = hasKeyword ? 1.2 : 1;
+  
+  const min = Math.round(tldRange.min * lengthMultiplier * keywordMultiplier);
+  const max = Math.round(tldRange.max * lengthMultiplier * keywordMultiplier);
+  
+  return `$${min.toLocaleString()}-$${max.toLocaleString()}`;
+}
+
+/**
+ * Get domain root (name without TLD)
  */
 export function getDomainRoot(domainName: string): string {
-  return domainName.split('.')[0];
+  const parts = domainName.split('.');
+  return (parts.length > 1 ? parts.slice(0, -1).join('.') : domainName).toLowerCase();
 }
 
 /**
- * Get Namecheap affiliate URL with domain pre-filled
- * This is the CORRECT format that will show the domain on Namecheap
+ * Get backorder prices
+ */
+export function getBackorderPrice(provider: 'dropcatch' | 'snapnames' | 'godaddy'): string {
+  const prices = {
+    dropcatch: '$59',
+    snapnames: '$69',
+    godaddy: '$25',
+  };
+  return prices[provider] || '$59';
+}
+
+/**
+ * Get Namecheap affiliate URL with Impact.com support
  */
 export function getNamecheapAffiliateUrl(domainName: string): string {
-  const affiliateId = process.env.NEXT_PUBLIC_NAMECHEAP_AFF_ID || 'PzjyBN';
+  const searchUrl = `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domainName)}`;
+  const impactTemplate = process.env.NEXT_PUBLIC_NAMECHEAP_IMPACT_LINK_TEMPLATE;
   
-  // IMPORTANT: This URL format shows the domain search results on Namecheap
-  // The user will see if the domain is available or in auction
-  return `https://www.namecheap.com/domains/registration/results/?domain=${domainName}&aff=${affiliateId}`;
+  if (impactTemplate) {
+    // Use Impact.com template (recommended - better tracking)
+    // Template should be: https://namecheap.pxf.io/c/XXXXX/XXXXX/5618?u={url}
+    return impactTemplate.replace('{url}', encodeURIComponent(searchUrl));
+  }
+  
+  // Fallback to direct affiliate link
+  const affId = process.env.NEXT_PUBLIC_NAMECHEAP_AFF_ID || 'PzjyBN';
+  return `${searchUrl}&aff=${affId}`;
 }
 
 /**
- * Get SnapNames affiliate URL
+ * Get DropCatch affiliate URL
+ * Use this instead of SnapNames!
  */
-export function getSnapNamesAffiliateUrl(domainName: string): string {
-  const affiliateId = process.env.NEXT_PUBLIC_SNAPNAMES_AFF_ID || '';
-  return `https://www.snapnames.com/search?query=${domainName}&aff=${affiliateId}`;
+export function getDropCatchAffiliateUrl(domainName: string): string {
+  const affiliateId = process.env.NEXT_PUBLIC_DROPCATCH_AFF_ID || '';
+  
+  // DropCatch domain backorder page
+  return `https://www.dropcatch.com/domain/${encodeURIComponent(domainName)}${affiliateId ? `?aff=${affiliateId}` : ''}`;
 }
 
 /**
@@ -37,128 +98,24 @@ export function getSnapNamesAffiliateUrl(domainName: string): string {
 export function getGoDaddyAffiliateUrl(domainName: string): string {
   const affiliateId = process.env.NEXT_PUBLIC_GODADDY_AFF_ID || '';
   
-  // GoDaddy domain search with affiliate tracking
-  return `https://www.godaddy.com/domainsearch/find?checkAvail=1&domainToCheck=${domainName}&tmskey=${affiliateId}`;
+  // GoDaddy domain search
+  return `https://www.godaddy.com/domainsearch/find?checkAvail=1&domainToCheck=${encodeURIComponent(domainName)}${affiliateId ? `&tmskey=${affiliateId}` : ''}`;
 }
 
 /**
- * Calculate estimated domain value based on characteristics
+ * Get DynaDot affiliate URL
  */
-export function getEstimatedValue(domain: { tld: string; domain_name: string; popularity_score: number }): string {
-  const name = domain.domain_name.split('.')[0];
-  const length = name.length;
+export function getDynaDotAffiliateUrl(domainName: string): string {
+  const affiliateId = process.env.NEXT_PUBLIC_DYNADOT_AFF_ID || '';
   
-  // Base value by TLD
-  let minValue = 100;
-  let maxValue = 500;
-  
-  switch (domain.tld.toLowerCase()) {
-    case 'com':
-      minValue = 500;
-      maxValue = 2000;
-      break;
-    case 'io':
-      minValue = 200;
-      maxValue = 1000;
-      break;
-    case 'ai':
-      minValue = 300;
-      maxValue = 1500;
-      break;
-    case 'app':
-      minValue = 150;
-      maxValue = 800;
-      break;
-    case 'dev':
-      minValue = 150;
-      maxValue = 700;
-      break;
-    case 'co':
-      minValue = 200;
-      maxValue = 900;
-      break;
-  }
-  
-  // Adjust for length (shorter = more valuable)
-  if (length <= 5) {
-    minValue *= 3;
-    maxValue *= 3;
-  } else if (length <= 8) {
-    minValue *= 1.5;
-    maxValue *= 1.5;
-  }
-  
-  // Adjust for popularity score
-  if (domain.popularity_score >= 80) {
-    minValue *= 2;
-    maxValue *= 2;
-  } else if (domain.popularity_score >= 70) {
-    minValue *= 1.5;
-    maxValue *= 1.5;
-  }
-  
-  // Format as range
-  return `$${Math.round(minValue).toLocaleString()}-$${Math.round(maxValue).toLocaleString()}`;
+  // DynaDot domain search
+  return `https://www.dynadot.com/domain/search.html?domain=${encodeURIComponent(domainName)}${affiliateId ? `&aff_id=${affiliateId}` : ''}`;
 }
 
 /**
- * Get backorder prices for different services
+ * Legacy SnapNames support (keep for backward compatibility)
  */
-export function getBackorderPrice(service: 'snapnames' | 'dropcatch' | 'godaddy'): string {
-  const prices = {
-    snapnames: '$69',
-    dropcatch: '$59',
-    godaddy: '$24.99',
-  };
-  
-  return prices[service];
-}
-
-/**
- * Calculate urgency level based on days until drop
- */
-export function getUrgencyLevel(daysUntilDrop: number): 'high' | 'medium' | 'low' {
-  if (daysUntilDrop <= 5) return 'high';
-  if (daysUntilDrop <= 10) return 'medium';
-  return 'low';
-}
-
-/**
- * Get urgency color classes
- */
-export function getUrgencyColorClasses(daysUntilDrop: number): string {
-  const level = getUrgencyLevel(daysUntilDrop);
-  
-  const classes = {
-    high: 'text-red-700 bg-red-50 border-red-100',
-    medium: 'text-amber-700 bg-amber-50 border-amber-100',
-    low: 'text-emerald-700 bg-emerald-50 border-emerald-100',
-  };
-  
-  return classes[level];
-}
-
-/**
- * Format drop date for display
- */
-export function formatDropDate(dropDate: string): string {
-  return new Date(dropDate).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-/**
- * Check if domain is expiring soon (within 7 days)
- */
-export function isExpiringSoon(daysUntilDrop: number): boolean {
-  return daysUntilDrop <= 7;
-}
-
-/**
- * Check if domain is high value (score >= 70)
- */
-export function isHighValue(popularityScore: number): boolean {
-  return popularityScore >= 70;
+export function getSnapNamesAffiliateUrl(domainName: string): string {
+  const affiliateId = process.env.NEXT_PUBLIC_SNAPNAMES_AFF_ID || '';
+  return `https://www.snapnames.com/search?query=${encodeURIComponent(domainName)}${affiliateId ? `&aff=${affiliateId}` : ''}`;
 }
