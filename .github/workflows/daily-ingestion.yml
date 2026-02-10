@@ -43,6 +43,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           WHOIS_API_KEY: ${{ secrets.WHOIS_API_KEY }}
+          DROPCATCH_API_KEY: ${{ secrets.DROPCATCH_API_KEY }}
       
       # Step 5: Run cleanup if enabled
       - name: Cleanup old domains
@@ -77,10 +78,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       
       - name: Generate daily stats
         run: node scripts/daily-report.js
