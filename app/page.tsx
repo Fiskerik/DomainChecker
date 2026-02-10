@@ -71,6 +71,7 @@ export default function DomainsPage() {
   };
 
   return (
+    <head><meta name='impact-site-verification' value='ca0aaced-7984-4e30-a189-511ccce10bb0'></head>
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b">
