@@ -10,6 +10,7 @@ export const metadata = {
   verification: {
     other: {
       'impact-site-verification': 'ca0aaced-7984-4e30-a189-511ccce10bb0',
+      'google-site-verification': 'a7ooX99wNHGQkLtrXE6yZp6A_dw1L1lpWOvVXN-DUgI',
     },
   },
 };
