@@ -10,6 +10,9 @@ import {
   getBackorderPrice,
   getDomainRoot
 } from '@/lib/domain-utils';
+import { PriceComparison } from '@/components/PriceComparison';
+
+
 
 interface Domain {
   id: number;
@@ -186,7 +189,7 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
               <Clock size={48} className="opacity-50" />
             </div>
           </div>
-
+          <PriceComparison domainName={domain.domain_name} domainId={domain.id} />
           {/* Stats Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-8 py-8 border-b">
             <div>
