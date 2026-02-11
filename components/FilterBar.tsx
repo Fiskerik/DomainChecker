@@ -3,7 +3,7 @@
 import { LayoutGrid, List, RefreshCw, Search } from 'lucide-react';
 import { useState } from 'react';
 
-interface ImprovedFilterBarProps {
+interface FilterBarProps {
   filters: any;
   onFilterChange: (filters: any) => void;
   onRefresh: () => void;
@@ -11,7 +11,7 @@ interface ImprovedFilterBarProps {
   onViewModeChange: (mode: 'card' | 'list') => void;
 }
 
-export function ImprovedFilterBar({ 
+export function FilterBar({ 
   filters, 
   onFilterChange, 
   onRefresh,
@@ -241,5 +241,3 @@ export function ImprovedFilterBar({
     </div>
   );
 }
-
-export default FilterBar;
