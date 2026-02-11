@@ -372,6 +372,13 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
               </div>
             </div>
           )}
+                    <RelatedDomains 
+            currentDomainId={domain.id} 
+            category={domain.category} 
+            tld={domain.tld} 
+          />
+
+
         </div>
 
         {/* Share Success Toast */}
@@ -384,8 +391,4 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
     </div>
   );
 }
-<RelatedDomains 
-  currentDomainId={domain.id} 
-  category={domain.category} 
-  tld={domain.tld} 
-/>
+
