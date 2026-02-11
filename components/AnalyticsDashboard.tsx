@@ -190,7 +190,13 @@ export function AnalyticsDashboard() {
   );
 }
 
-function StatCard({ icon, title, value, color, subtitle }: any) {
+function StatCard({ icon, title, value, color, subtitle }: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  color: 'blue' | 'green' | 'purple' | 'yellow';
+  subtitle?: string;
+}) {
   const colors = {
     blue: 'bg-blue-100 text-blue-600',
     green: 'bg-green-100 text-green-600',
