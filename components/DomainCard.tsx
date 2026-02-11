@@ -23,12 +23,12 @@ interface Domain {
   click_count_total: number;
 }
 
-interface CompactDomainCardProps {
+interface DomainCardProps {
   domain: Domain;
   viewMode: 'card' | 'list';
 }
 
-export function CompactDomainCard({ domain, viewMode }: DomainCardProps) {
+export function DomainCard({ domain, viewMode }: DomainCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
 
@@ -239,5 +239,3 @@ export function CompactDomainCard({ domain, viewMode }: DomainCardProps) {
     </div>
   );
 }
-
-export default CompactDomainCard;
