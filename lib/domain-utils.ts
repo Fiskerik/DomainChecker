@@ -71,35 +71,40 @@ export function getNamecheapAffiliateUrl(domainName: string): string {
   const impactTemplate = process.env.NEXT_PUBLIC_NAMECHEAP_IMPACT_LINK_TEMPLATE;
   
   if (impactTemplate) {
-    // Use Impact.com template (recommended - better tracking)
-    // Template should be: https://namecheap.pxf.io/c/XXXXX/XXXXX/5618?u={url}
     return impactTemplate.replace('{url}', encodeURIComponent(searchUrl));
   }
   
-  // Fallback to direct affiliate link
   const affId = process.env.NEXT_PUBLIC_NAMECHEAP_AFF_ID || 'PzjyBN';
   return `${searchUrl}&aff=${affId}`;
 }
 
 /**
  * Get DropCatch affiliate URL
- * Use this instead of SnapNames!
  */
 export function getDropCatchAffiliateUrl(domainName: string): string {
   const affiliateId = process.env.NEXT_PUBLIC_DROPCATCH_AFF_ID || '';
-  
-  // DropCatch domain backorder page
   return `https://www.dropcatch.com/domain/${encodeURIComponent(domainName)}${affiliateId ? `?aff=${affiliateId}` : ''}`;
 }
 
 /**
- * Get GoDaddy affiliate URL
+ * Get GoDaddy affiliate URL via CJ
+ * Uses Commission Junction (CJ) affiliate network
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
-  const affiliateId = process.env.NEXT_PUBLIC_GODADDY_AFF_ID || '';
+  const advertiserId = process.env.NEXT_PUBLIC_GODADDY_ADVERTISER_ID || '1513033';
+  const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '';
   
-  // GoDaddy domain search
-  return `https://www.godaddy.com/domainsearch/find?checkAvail=1&domainToCheck=${encodeURIComponent(domainName)}${affiliateId ? `&tmskey=${affiliateId}` : ''}`;
+  // GoDaddy domain search page
+  const destinationUrl = `https://www.godaddy.com/domainsearch/find?checkAvail=1&domainToCheck=${encodeURIComponent(domainName)}`;
+  
+  // CJ deep link format
+  // Reference: https://members.cj.com/member/publisher/deeplink.do
+  if (publisherId) {
+    return `https://www.anrdoezrs.net/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
+  }
+  
+  // Fallback to direct link
+  return destinationUrl;
 }
 
 /**
@@ -107,15 +112,81 @@ export function getGoDaddyAffiliateUrl(domainName: string): string {
  */
 export function getDynaDotAffiliateUrl(domainName: string): string {
   const affiliateId = process.env.NEXT_PUBLIC_DYNADOT_AFF_ID || '';
-  
-  // DynaDot domain search
   return `https://www.dynadot.com/domain/search.html?domain=${encodeURIComponent(domainName)}${affiliateId ? `&aff_id=${affiliateId}` : ''}`;
 }
 
 /**
- * Legacy SnapNames support (keep for backward compatibility)
+ * Get all affiliate options for price comparison
  */
-export function getSnapNamesAffiliateUrl(domainName: string): string {
-  const affiliateId = process.env.NEXT_PUBLIC_SNAPNAMES_AFF_ID || '';
-  return `https://www.snapnames.com/search?query=${encodeURIComponent(domainName)}${affiliateId ? `&aff=${affiliateId}` : ''}`;
+export interface AffiliateOption {
+  name: string;
+  price: string;
+  url: string;
+  type: 'backorder' | 'register';
+  commission?: string;
+}
+
+export function getAllAffiliateOptions(domainName: string): AffiliateOption[] {
+  return [
+    {
+      name: 'DropCatch',
+      price: '$59',
+      url: getDropCatchAffiliateUrl(domainName),
+      type: 'backorder',
+      commission: '~$9 (15%)',
+    },
+    {
+      name: 'SnapNames',
+      price: '$69',
+      url: `https://www.snapnames.com/search?query=${encodeURIComponent(domainName)}`,
+      type: 'backorder',
+      commission: '~$10 (15%)',
+    },
+    {
+      name: 'GoDaddy',
+      price: '$24.99',
+      url: getGoDaddyAffiliateUrl(domainName),
+      type: 'backorder',
+      commission: '~$5-25',
+    },
+    {
+      name: 'Namecheap',
+      price: '$10-15',
+      url: getNamecheapAffiliateUrl(domainName),
+      type: 'register',
+      commission: '$2-5',
+    },
+    {
+      name: 'DynaDot',
+      price: '$9.99',
+      url: getDynaDotAffiliateUrl(domainName),
+      type: 'register',
+      commission: '$1-3',
+    },
+  ];
+}
+
+/**
+ * Get urgency level
+ */
+export function getUrgencyLevel(daysUntilDrop: number): 'high' | 'medium' | 'low' {
+  if (daysUntilDrop <= 5) return 'high';
+  if (daysUntilDrop <= 10) return 'medium';
+  return 'low';
+}
+
+/**
+ * Get similar domains by category
+ */
+export function getSimilarDomainKeywords(category: string): string[] {
+  const keywords: Record<string, string[]> = {
+    tech: ['app', 'dev', 'tech', 'code', 'cloud', 'data', 'api', 'software', 'digital', 'web'],
+    finance: ['pay', 'coin', 'crypto', 'bank', 'invest', 'fund', 'trade', 'finance', 'money', 'cash'],
+    ecommerce: ['shop', 'store', 'buy', 'market', 'sell', 'deal', 'cart', 'retail', 'merch', 'goods'],
+    health: ['health', 'fit', 'med', 'care', 'wellness', 'bio', 'pharma', 'clinic', 'therapy', 'vita'],
+    gaming: ['game', 'play', 'esport', 'stream', 'gaming', 'player', 'battle', 'quest', 'arena', 'guild'],
+    education: ['learn', 'edu', 'course', 'teach', 'school', 'study', 'tutor', 'academy', 'class', 'training'],
+  };
+  
+  return keywords[category] || [];
 }
