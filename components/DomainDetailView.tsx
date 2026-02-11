@@ -11,6 +11,7 @@ import {
   getDomainRoot
 } from '@/lib/domain-utils';
 import { PriceComparison } from '@/components/PriceComparison';
+import { RelatedDomains } from '@/components/RelatedDomains';
 
 
 
@@ -381,3 +382,8 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
     </div>
   );
 }
+<RelatedDomains 
+  currentDomainId={domain.id} 
+  category={domain.category} 
+  tld={domain.tld} 
+/>
