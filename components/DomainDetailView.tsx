@@ -12,6 +12,7 @@ import {
 } from '@/lib/domain-utils';
 import { PriceComparison } from '@/components/PriceComparison';
 import { RelatedDomains } from '@/components/RelatedDomains';
+import { FavoriteButton } from '@/components/Favorites';
 
 
 
@@ -162,6 +163,7 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
               >
                 <Share2 size={20} />
               </button>
+              <FavoriteButton domain={domain} />
             </div>
           </div>
 
