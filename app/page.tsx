@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CompactDomainCard } from '@/components/CompactDomainCard';
-import { ImprovedFilterBar } from '@/components/ImprovedFilterBar';
+import { CompactDomainCard } from '@/components/DomainCard';
+import { ImprovedFilterBar } from '@/components/FilterBar';
 import { StatsBar } from '@/components/StatsBar';
 
 interface Domain {
