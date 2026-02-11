@@ -242,4 +242,4 @@ export function ImprovedFilterBar({
   );
 }
 
-export default ImprovedFilterBar;
+export default FilterBar;
