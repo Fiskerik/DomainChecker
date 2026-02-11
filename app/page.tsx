@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CompactDomainCard } from '@/components/DomainCard';
-import { ImprovedFilterBar } from '@/components/FilterBar';
+import { DomainCard } from '@/components/DomainCard';
+import { FilterBar } from '@/components/FilterBar';
 import { StatsBar } from '@/components/StatsBar';
 
 interface Domain {
@@ -108,7 +108,7 @@ export default function ImprovedDomainsPage() {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Filter Bar */}
         <div className="mb-4 sm:mb-6">
-          <ImprovedFilterBar
+          <FilterBar
             filters={filters}
             onFilterChange={setFilters}
             onRefresh={fetchDomains}
@@ -139,7 +139,7 @@ export default function ImprovedDomainsPage() {
               : 'space-y-2 sm:space-y-3'
           }>
             {domains.map((domain) => (
-              <CompactDomainCard
+              <DomainCard
                 key={domain.id}
                 domain={domain}
                 viewMode={viewMode}
