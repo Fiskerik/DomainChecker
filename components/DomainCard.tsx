@@ -28,7 +28,7 @@ interface CompactDomainCardProps {
   viewMode: 'card' | 'list';
 }
 
-export function CompactDomainCard({ domain, viewMode }: CompactDomainCardProps) {
+export function CompactDomainCard({ domain, viewMode }: DomainCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
 
