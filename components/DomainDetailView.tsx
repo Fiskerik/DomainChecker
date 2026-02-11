@@ -24,12 +24,12 @@ interface Domain {
   click_count_total: number;
 }
 
-interface CleanDomainDetailViewProps {
+interface DomainDetailViewProps {
   domain: Domain;
   similarDomains: Domain[];
 }
 
-export function CleanDomainDetailView({ domain, similarDomains }: CleanDomainDetailViewProps) {
+export function DomainDetailView({ domain, similarDomains }: DomainDetailViewProps) {
   const [timeLeft, setTimeLeft] = useState('');
   const [isTracking, setIsTracking] = useState(false);
 
@@ -235,5 +235,3 @@ export function CleanDomainDetailView({ domain, similarDomains }: CleanDomainDet
     </div>
   );
 }
-
-export default DomainDetailView;
