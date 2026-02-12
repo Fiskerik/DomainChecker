@@ -38,6 +38,10 @@ export default function ImprovedDomainsPage() {
   });
   const [stats, setStats] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const DOMAINS_PER_PAGE = 50;
 
   // Load view preference from localStorage
   useEffect(() => {
@@ -56,6 +60,11 @@ export default function ImprovedDomainsPage() {
   // Fetch domains
   useEffect(() => {
     fetchDomains();
+  }, [filters, currentPage]);
+
+  // Reset to first page whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
   }, [filters]);
 
   // Fetch stats once
@@ -68,57 +77,21 @@ export default function ImprovedDomainsPage() {
     try {
       const params = new URLSearchParams({
         status: 'pending_delete',
+        limit: String(DOMAINS_PER_PAGE),
+        offset: String((currentPage - 1) * DOMAINS_PER_PAGE),
         ...(filters as any),
       });
 
       const response = await fetch(`/api/domains?${params}`);
       const data = await response.json();
 
-      const groupedDomains = groupDomainsByRoot(data.domains || []);
-      setDomains(sortDomains(groupedDomains, filters));
+      setDomains(data.domains || []);
+      setTotalCount(data.count || 0);
     } catch (error) {
       console.error('Error fetching domains:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const groupDomainsByRoot = (domainList: Domain[]) => {
-    const closestPerRoot = new Map<string, Domain>();
-
-    domainList.forEach((domain) => {
-      const root = domain.domain_name.split('.').slice(0, -1).join('.').toLowerCase();
-      const existing = closestPerRoot.get(root);
-
-      if (!existing || domain.days_until_drop < existing.days_until_drop) {
-        closestPerRoot.set(root, domain);
-      }
-    });
-
-    return Array.from(closestPerRoot.values());
-  };
-
-  const sortDomains = (domainList: Domain[], activeFilters: Filters) => {
-    const sortField = activeFilters.sort || 'days_until_drop';
-    const sortOrder = activeFilters.order || 'asc';
-
-    return [...domainList].sort((a, b) => {
-      const direction = sortOrder === 'desc' ? -1 : 1;
-
-      if (sortField === 'domain_name') {
-        return a.domain_name.localeCompare(b.domain_name) * direction;
-      }
-
-      if (sortField === 'drop_date' || sortField === 'created_at') {
-        const aDate = new Date((a as any)[sortField]).getTime();
-        const bDate = new Date((b as any)[sortField]).getTime();
-        return (aDate - bDate) * direction;
-      }
-
-      const aValue = Number((a as any)[sortField] ?? 0);
-      const bValue = Number((b as any)[sortField] ?? 0);
-      return (aValue - bValue) * direction;
-    });
   };
 
   const fetchStats = async () => {
@@ -140,7 +113,7 @@ export default function ImprovedDomainsPage() {
             🎯 Premium Domains
           </h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Dropping in 5-15 days
+            Dropping in 0-10 days
           </p>
         </div>
       </header>
@@ -191,11 +164,32 @@ export default function ImprovedDomainsPage() {
           </div>
         )}
 
-        {/* Results Count */}
-        {!loading && domains.length > 0 && (
-          <p className="text-center text-xs sm:text-sm text-gray-500 mt-6">
-            Showing {domains.length} domain{domains.length !== 1 ? 's' : ''}
-          </p>
+        {/* Results Count + Pagination */}
+        {!loading && totalCount > 0 && (
+          <div className="mt-6 space-y-4">
+            <p className="text-center text-xs sm:text-sm text-gray-500">
+              Showing {(currentPage - 1) * DOMAINS_PER_PAGE + 1}-{Math.min(currentPage * DOMAINS_PER_PAGE, totalCount)} of {totalCount} domains
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-gray-600 px-3">
+                Page {currentPage} of {Math.max(1, Math.ceil(totalCount / DOMAINS_PER_PAGE))}
+              </span>
+              <button
+                onClick={() => setCurrentPage((page) => Math.min(Math.ceil(totalCount / DOMAINS_PER_PAGE), page + 1))}
+                disabled={currentPage >= Math.ceil(totalCount / DOMAINS_PER_PAGE)}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

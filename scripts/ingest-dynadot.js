@@ -4,7 +4,7 @@
  * Domain Ingestion Script - Dynadot API Version
  * 
  * Fetches expiring domains from Dynadot API and stores them in Supabase.
- * Focuses on domains in "pending delete" status (5-15 days before drop).
+ * Focuses on domains in "pending delete" status (0-10 days before drop).
  * 
  * Run: node scripts/ingest-dynadot.js
  * 
@@ -25,7 +25,7 @@ const supabase = createClient(
 const DYNADOT_API_KEY = process.env.DYNADOT_API_KEY;
 
 const MIN_DAYS_UNTIL_DROP = parseInt(process.env.MIN_DAYS_UNTIL_DROP || '0', 10);
-const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '5', 10);
+const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '10', 10);
 
 const TRENDING_KEYWORDS = [
   'ai', 'agent', 'agents', 'gpt', 'llm', 'ml', 'automate', 'automation',
@@ -208,15 +208,15 @@ function generateMockDomains() {
   
   const mockDomains = [];
   
-  // Generate 100 mock domains
-  for (let i = 0; i < 100; i++) {
+  // Generate 500 mock domains
+  for (let i = 0; i < 500; i++) {
     const prefix = prefixes[i % prefixes.length];
     const suffix = i >= prefixes.length ? (i - prefixes.length + 1) : '';
     const tld = tlds[Math.floor(Math.random() * tlds.length)];
     const domainName = `${prefix}${suffix}.${tld}`;
     
-    // Create expiry dates for pending_delete status (60-75 days ago)
-    const daysAgo = 60 + Math.floor(Math.random() * 15);
+    // Create expiry dates for pending_delete status (65-75 days ago => 10 to 0 days until drop)
+    const daysAgo = 65 + Math.floor(Math.random() * 11);
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() - daysAgo);
     
@@ -241,7 +241,7 @@ async function upsertDomain(domainData) {
     const daysUntilDrop = calculateDaysUntilDrop(dropDate);
     const status = determineStatus(expiryDate);
     
-    // Only store domains in pending_delete status (5-15 days until drop)
+    // Only store domains in pending_delete status (0-10 days until drop)
     if (status !== 'pending_delete' || daysUntilDrop < MIN_DAYS_UNTIL_DROP || daysUntilDrop > MAX_DAYS_UNTIL_DROP) {
       return { stored: false, reason: `Status: ${status}, Days: ${daysUntilDrop}` };
     }
