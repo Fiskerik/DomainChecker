@@ -92,6 +92,14 @@ export function getDropCatchAffiliateUrl(domainName: string): string {
   return affiliateId ? `${baseUrl}?aff=${affiliateId}` : baseUrl;
 }
 
+/**
+ * Get DynaDot affiliate URL
+ * Uses all-in-one tracking link with domain parameter
+ */
+export function getDynaDotAffiliateUrl(domainName: string): string {
+  // Your custom tracking link from DynaDot
+  return `https://www.dynadot.com/?rsc=domainchecker&rsctrn=domainchecker&rscreg=domainchecker&rsceh=domainchecker&rscsb=domainchecker&rscco=domainchecker&rscbo=domainchecker&domain=${encodeURIComponent(domainName)}`;
+}
 
 /**
  * Get GoDaddy affiliate URL via CJ
@@ -112,14 +120,6 @@ export function getGoDaddyAffiliateUrl(domainName: string): string {
   
   // Fallback to direct link
   return destinationUrl;
-}
-
-/**
- * Get DynaDot affiliate URL
- */
-export function getDynaDotAffiliateUrl(domainName: string): string {
-  const affiliateId = process.env.NEXT_PUBLIC_DYNADOT_AFF_ID || '';
-  return `https://www.dynadot.com/domain/search.html?domain=${encodeURIComponent(domainName)}${affiliateId ? `&aff_id=${affiliateId}` : ''}`;
 }
 
 /**
