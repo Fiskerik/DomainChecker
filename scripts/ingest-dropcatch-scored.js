@@ -31,7 +31,7 @@ const NAMEBIO_API_KEY = process.env.NAMEBIO_API_KEY; // Optional
 
 const MIN_SCORE = 30; // Reject domains below this score
 const ENABLE_WHOIS_CHECK = true; // Set to false to skip WHOIS validation
-const MAX_DOMAINS_TO_PROCESS = parseInt(process.env.MAX_DOMAINS_TO_STORE || '500', 10);
+const MAX_DOMAINS_TO_PROCESS = parseInt(process.env.MAX_DOMAINS_TO_STORE || '300', 10);
 const WHOIS_REQUEST_DELAY_MS = parseInt(process.env.WHOIS_REQUEST_DELAY_MS || '2000', 10);
 const WHOIS_RETRY_ATTEMPTS = parseInt(process.env.WHOIS_RETRY_ATTEMPTS || '2', 10);
 const WHOIS_RETRY_DELAY_MS = parseInt(process.env.WHOIS_RETRY_DELAY_MS || '1500', 10);
