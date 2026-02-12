@@ -60,7 +60,8 @@ async function filterOutRegisteredDomains(domains: DomainRecord[]): Promise<Doma
  * Fetch domains with filters
  * 
  * Query params:
- * - status: Filter by status (default: 'pending_delete')
+ * - status: Filter by a specific status
+ * - status_mode: 'exclude_pending_delete' | 'all' | specific status (default: 'exclude_pending_delete')
  * - tld: Filter by TLD (e.g., 'com', 'io')
  * - category: Filter by category (e.g., 'tech', 'finance')
  * - min_score: Minimum popularity score (0-100)
@@ -77,7 +78,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     
     // Parse query parameters
-    const status = searchParams.get('status') || 'pending_delete';
+    const status = searchParams.get('status');
+    const statusMode = searchParams.get('status_mode') || 'exclude_pending_delete';
     const tld = searchParams.get('tld');
     const category = searchParams.get('category');
     const minScore = parseInt(searchParams.get('min_score') || '0');
@@ -94,8 +96,17 @@ export async function GET(request: Request) {
     // Build query
     let query = supabase
       .from('domains')
-      .select('*', { count: 'exact' })
-      .eq('status', status);
+      .select('*', { count: 'exact' });
+
+    const supportedStatuses = ['pending_delete', 'grace', 'redemption', 'dropped'];
+
+    if (status) {
+      query = query.eq('status', status);
+    } else if (statusMode === 'exclude_pending_delete') {
+      query = query.neq('status', 'pending_delete');
+    } else if (statusMode !== 'all' && supportedStatuses.includes(statusMode)) {
+      query = query.eq('status', statusMode);
+    }
     
     // Apply filters
     if (tld) {

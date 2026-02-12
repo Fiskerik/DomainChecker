@@ -20,6 +20,7 @@ interface Domain {
 }
 
 interface Filters {
+  status_mode?: 'exclude_pending_delete' | 'all' | 'pending_delete' | 'grace' | 'redemption' | 'dropped';
   tld?: string;
   category?: string;
   min_score?: number;
@@ -33,6 +34,7 @@ export default function ImprovedDomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>({
+    status_mode: 'exclude_pending_delete',
     sort: 'days_until_drop',
     order: 'asc',
   });
@@ -76,7 +78,6 @@ export default function ImprovedDomainsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        status: 'pending_delete',
         limit: String(DOMAINS_PER_PAGE),
         offset: String((currentPage - 1) * DOMAINS_PER_PAGE),
         ...(filters as any),
@@ -142,7 +143,7 @@ export default function ImprovedDomainsPage() {
           <div className="text-center py-20">
             <p className="text-gray-500 text-base sm:text-lg">No domains found</p>
             <button
-              onClick={() => setFilters({ sort: 'days_until_drop', order: 'asc' })}
+              onClick={() => setFilters({ status_mode: 'exclude_pending_delete', sort: 'days_until_drop', order: 'asc' })}
               className="mt-4 text-sm sm:text-base text-blue-600 hover:text-blue-700"
             >
               Clear filters
