@@ -33,8 +33,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const MAX_DOMAINS_TO_STORE = parseInt(process.env.MAX_DOMAINS_TO_STORE || '100', 10);
+const MAX_DOMAINS_TO_STORE = parseInt(process.env.MAX_DOMAINS_TO_STORE || '300', 10);
 const MIN_POPULARITY_SCORE = parseInt(process.env.MIN_POPULARITY_SCORE || '0', 10);
+const MIN_DAYS_UNTIL_DROP = parseInt(process.env.MIN_DAYS_UNTIL_DROP || '0', 10);
+const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '5', 10);
 
 //const { isActuallyExpiring } = require('../lib/whois-validator.ts');
 
@@ -110,7 +112,12 @@ async function fetchDropCatchDomains() {
     })
     .filter(Boolean);
 
-    const rankedDomains = parsedDomains
+    const dropWindowDomains = parsedDomains.filter((domain) => {
+      const daysUntilDrop = calculateDaysUntilDrop(domain.dropDate);
+      return daysUntilDrop >= MIN_DAYS_UNTIL_DROP && daysUntilDrop <= MAX_DAYS_UNTIL_DROP;
+    });
+
+    const rankedDomains = dropWindowDomains
       .map((domain) => ({
         ...domain,
         popularityScore: calculatePopularityScore(domain.domainName),
@@ -121,6 +128,7 @@ async function fetchDropCatchDomains() {
       .map(({ popularityScore, ...domain }) => domain);
 
     console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV`);
+    console.log(`🗓️  Domains in drop window (${MIN_DAYS_UNTIL_DROP}-${MAX_DAYS_UNTIL_DROP} days): ${dropWindowDomains.length}`);
     console.log(`📈 Selected top ${rankedDomains.length} domains by popularity score (min ${MIN_POPULARITY_SCORE}, max ${MAX_DOMAINS_TO_STORE})\n`);
     return rankedDomains;
 
@@ -276,8 +284,7 @@ async function upsertDomain(domainData) {
     const daysUntilDrop = calculateDaysUntilDrop(dropDate);
     const status = determineStatus(normalizedExpiryDate);
     
-    // Only store pending_delete domains (5-15 days window)
-    if (status !== 'pending_delete' || daysUntilDrop < 5 || daysUntilDrop > 15) {
+    if (daysUntilDrop < MIN_DAYS_UNTIL_DROP || daysUntilDrop > MAX_DAYS_UNTIL_DROP) {
       return { stored: false, reason: `Out of range: ${status}, ${daysUntilDrop}d` };
     }
     
