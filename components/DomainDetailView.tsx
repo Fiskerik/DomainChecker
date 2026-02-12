@@ -22,6 +22,7 @@ interface Domain {
   expiry_date: string;
   view_count: number;
   click_count_total: number;
+  slug: string;
 }
 
 interface DomainDetailViewProps {
