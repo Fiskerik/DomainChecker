@@ -2,7 +2,7 @@ name: Daily Domain Ingestion
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 21 * * *' # Körs kl 22:00 svensk tid varje kväll
   workflow_dispatch:
     inputs:
       cleanup:
@@ -23,17 +23,17 @@ jobs:
         with:
           node-version: '18'
 
-
       - name: Install dependencies
-        run: npm install # Ändrat från 'npm ci'
+        run: npm install
       
       - name: Fetch and store domains
         run: node scripts/ingest-dropcatch.js
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          WHOIS_API_KEY: ${{ secrets.WHOIS_API_KEY }}
-          DROPCATCH_API_KEY: ${{ secrets.DROPCATCH_API_KEY }}
+          # Uppdaterade DropCatch-variabler nedan:
+          DROPCATCH_CLIENT_ID: ${{ secrets.DROPCATCH_CLIENT_ID }}
+          DROPCATCH_CLIENT_SECRET: ${{ secrets.DROPCATCH_PASSWORD }}
 
       - name: Cleanup old domains
         if: ${{ github.event.inputs.cleanup == 'true' || github.event_name == 'schedule' }}
@@ -55,9 +55,8 @@ jobs:
         with:
           node-version: '18'
 
-
       - name: Install dependencies
-        run: npm install # Ändrat från 'npm ci'
+        run: npm install
       
       - name: Generate daily stats
         run: node scripts/daily-report.js
