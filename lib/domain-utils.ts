@@ -96,18 +96,23 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Testar en förenklad version för att undvika att länken "fastnar" i omdirigeringar
+ * Optimerad för att undvika omdirigeringsloopar och trigga sökning direkt
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
-  const advertiserId = '15060776'; 
+  const adId = '15060776'; // Ditt fungerande annons-ID
   
-  // Vi skapar sök-URL:en direkt med dina kampanjparametrar (isc=cjcdbs)
-  // Detta gör att GoDaddy ser att det är en affiliate-sökning direkt vid landning.
-  const directSearchUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcdbs&cjelbDays=45`;
+  /**
+   * Vi använder /en-ca/domains som bas (från din fungerande bild).
+   * Genom att lägga till q=[domän] eller domainToCheck triggar vi sökfältet.
+   */
+  const godaddyUrl = `https://www.godaddy.com/en-ca/domains/registration/results/?domain=${encodeURIComponent(domainName)}&isc=cjcdbs`;
 
-  // Vi använder 'jdoqocy.com' som ofta är mer stabil för direkta deep-links hos GoDaddy
-  return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(directSearchUrl)}`;
+  /**
+   * Vi skickar användaren via jdoqocy.com (CJ) men pekar på sökresultatsidan.
+   * Detta sätter cookien först och landar sedan på rätt ställe.
+   */
+  return `https://www.jdoqocy.com/click-${publisherId}-${adId}?url=${encodeURIComponent(godaddyUrl)}`;
 }
 
 /**
