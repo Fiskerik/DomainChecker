@@ -17,7 +17,7 @@ export function FilterBar({
   onRefresh,
   viewMode,
   onViewModeChange
-}: ImprovedFilterBarProps) {
+}: FilterBarProps) {
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
