@@ -96,23 +96,16 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Optimerad för att undvika omdirigeringsloopar och trigga sökning direkt
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
-  const adId = '15060776'; // Ditt fungerande annons-ID
+  const adId = '15060776'; 
   
-  /**
-   * Vi använder /en-ca/domains som bas (från din fungerande bild).
-   * Genom att lägga till q=[domän] eller domainToCheck triggar vi sökfältet.
-   */
-  const godaddyUrl = `https://www.godaddy.com/en-ca/domains/registration/results/?domain=${encodeURIComponent(domainName)}&isc=cjcdbs`;
+  // Denna URL triggar GoDaddys sökning korrekt utan 404
+  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcdbs`;
 
-  /**
-   * Vi skickar användaren via jdoqocy.com (CJ) men pekar på sökresultatsidan.
-   * Detta sätter cookien först och landar sedan på rätt ställe.
-   */
-  return `https://www.jdoqocy.com/click-${publisherId}-${adId}?url=${encodeURIComponent(godaddyUrl)}`;
+  // Vi använder jdoqocy.com som hanterar parametrar bäst
+  return `https://www.jdoqocy.com/click-${publisherId}-${adId}?url=${encodeURIComponent(destinationUrl)}`;
 }
 
 /**
