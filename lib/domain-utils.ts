@@ -85,7 +85,6 @@ export function getDropCatchAffiliateUrl(domainName: string): string {
   const affiliateId = process.env.NEXT_PUBLIC_DROPCATCH_AFF_ID || '';
   
   // DropCatch domain backorder page - CORRECT FORMAT
-  // Should be: https://www.dropcatch.com/domain/example.com
   const baseUrl = `https://www.dropcatch.com/domain/${encodeURIComponent(domainName)}`;
   
   // Add affiliate ID if available
@@ -103,22 +102,21 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Uses Commission Junction (CJ) affiliate network
+ * Uses Commission Junction (CJ) affiliate network with deep linking to search
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
   const advertiserId = process.env.NEXT_PUBLIC_GODADDY_ADVERTISER_ID || '1513033';
-  const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '';
+  const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
   
-  // GoDaddy domain search page
-  const destinationUrl = `https://www.godaddy.com/domainsearch/find?checkAvail=1&domainToCheck=${encodeURIComponent(domainName)}`;
+  // The specific GoDaddy search landing page
+  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos1&utm_source=cj&utm_medium=affiliate&utm_campaign=api_search`;
   
-  // CJ deep link format
-  // Reference: https://members.cj.com/member/publisher/deeplink.do
+  // Construct CJ Deep Link
+  // Format: click-[PID]-[AID]?url=[DESTINATION]
   if (publisherId) {
-    return `https://www.anrdoezrs.net/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
+    return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
   }
   
-  // Fallback to direct link
   return destinationUrl;
 }
 
