@@ -107,7 +107,7 @@ async function fetchDropCatchDomains() {
       }))
       .filter((domain) => domain.popularityScore >= MIN_POPULARITY_SCORE)
       .sort((a, b) => b.popularityScore - a.popularityScore)
-      .slice(0, MAX_DOMAINS_TO_STORE)
+      .slice(0, 250)
       .map(({ popularityScore, ...domain }) => domain);
 
     console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV`);
