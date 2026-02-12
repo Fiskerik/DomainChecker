@@ -27,9 +27,9 @@ const supabase = createClient(
  * Determine status based on expiry date
  */
 function determineStatus(expiryDate) {
-  const today = new Date();
-  const expiry = new Date(expiryDate);
-  const daysSinceExpiry = Math.floor((today - expiry) / (1000 * 60 * 60 * 24));
+  const todayUtcMidnight = toUtcMidnight(new Date());
+  const expiryUtcMidnight = toUtcMidnight(expiryDate);
+  const daysSinceExpiry = Math.round((todayUtcMidnight - expiryUtcMidnight) / (1000 * 60 * 60 * 24));
   
   if (daysSinceExpiry < 0) return 'active';
   if (daysSinceExpiry <= 30) return 'grace';
@@ -39,14 +39,20 @@ function determineStatus(expiryDate) {
 }
 
 /**
- * Calculate days until drop
+ * Normalize a date-like value to UTC midnight to avoid timezone drift
+ */
+function toUtcMidnight(dateInput) {
+  const date = new Date(dateInput);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+/**
+ * Calculate whole days until drop (date-only, timezone-safe)
  */
 function calculateDaysUntilDrop(dropDate) {
-  const today = new Date();
-  const drop = new Date(dropDate);
-  const diffTime = drop - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
+  const todayUtcMidnight = toUtcMidnight(new Date());
+  const dropUtcMidnight = toUtcMidnight(dropDate);
+  return Math.round((dropUtcMidnight - todayUtcMidnight) / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -231,6 +237,15 @@ async function removeNonPendingDomains() {
       console.log(`   Removed ${tooEarly.length} domains (too early - still in grace/redemption)`);
     }
     
+    const { count: pendingInWindow } = await supabase
+      .from('domains')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending_delete')
+      .gte('days_until_drop', 0)
+      .lte('days_until_drop', 10);
+
+    console.log(`   Debug: pending_delete domains currently in 0-10 window: ${pendingInWindow || 0}`);
+
     // Delete pending_delete domains outside 0-10 day window
     const { data: outsideWindow, error: windowError } = await supabase
       .from('domains')
