@@ -4,7 +4,7 @@
  * Domain Ingestion Script - Dynadot API Version
  * 
  * Fetches expiring domains from Dynadot API and stores them in Supabase.
- * Focuses on domains in "pending delete" status (5-15 days before drop).
+ * Focuses on domains in "pending delete" status (0-10 days before drop).
  * 
  * Run: node scripts/ingest-dynadot.js
  * 
@@ -25,7 +25,7 @@ const supabase = createClient(
 const DYNADOT_API_KEY = process.env.DYNADOT_API_KEY;
 
 const MIN_DAYS_UNTIL_DROP = parseInt(process.env.MIN_DAYS_UNTIL_DROP || '0', 10);
-const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '5', 10);
+const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '10', 10);
 
 const TRENDING_KEYWORDS = [
   'ai', 'agent', 'agents', 'gpt', 'llm', 'ml', 'automate', 'automation',
@@ -54,23 +54,29 @@ function calculateDropDate(expiryDate) {
 }
 
 /**
- * Calculate days until drop
+ * Normalize a date-like value to UTC midnight to avoid timezone drift
+ */
+function toUtcMidnight(dateInput) {
+  const date = new Date(dateInput);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+/**
+ * Calculate whole days until drop (date-only, timezone-safe)
  */
 function calculateDaysUntilDrop(dropDate) {
-  const today = new Date();
-  const drop = new Date(dropDate);
-  const diffTime = drop - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
+  const todayUtcMidnight = toUtcMidnight(new Date());
+  const dropUtcMidnight = toUtcMidnight(dropDate);
+  return Math.round((dropUtcMidnight - todayUtcMidnight) / (1000 * 60 * 60 * 24));
 }
 
 /**
  * Determine status based on expiry date
  */
 function determineStatus(expiryDate) {
-  const today = new Date();
-  const expiry = new Date(expiryDate);
-  const daysSinceExpiry = Math.floor((today - expiry) / (1000 * 60 * 60 * 24));
+  const todayUtcMidnight = toUtcMidnight(new Date());
+  const expiryUtcMidnight = toUtcMidnight(expiryDate);
+  const daysSinceExpiry = Math.round((todayUtcMidnight - expiryUtcMidnight) / (1000 * 60 * 60 * 24));
   
   if (daysSinceExpiry < 0) return 'active';
   if (daysSinceExpiry <= 30) return 'grace';
@@ -208,15 +214,15 @@ function generateMockDomains() {
   
   const mockDomains = [];
   
-  // Generate 100 mock domains
-  for (let i = 0; i < 100; i++) {
+  // Generate 500 mock domains
+  for (let i = 0; i < 500; i++) {
     const prefix = prefixes[i % prefixes.length];
     const suffix = i >= prefixes.length ? (i - prefixes.length + 1) : '';
     const tld = tlds[Math.floor(Math.random() * tlds.length)];
     const domainName = `${prefix}${suffix}.${tld}`;
     
-    // Create expiry dates for pending_delete status (60-75 days ago)
-    const daysAgo = 60 + Math.floor(Math.random() * 15);
+    // Create expiry dates for pending_delete status (65-75 days ago => 10 to 0 days until drop)
+    const daysAgo = 65 + Math.floor(Math.random() * 11);
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() - daysAgo);
     
@@ -241,7 +247,7 @@ async function upsertDomain(domainData) {
     const daysUntilDrop = calculateDaysUntilDrop(dropDate);
     const status = determineStatus(expiryDate);
     
-    // Only store domains in pending_delete status (5-15 days until drop)
+    // Only store domains in pending_delete status (0-10 days until drop)
     if (status !== 'pending_delete' || daysUntilDrop < MIN_DAYS_UNTIL_DROP || daysUntilDrop > MAX_DAYS_UNTIL_DROP) {
       return { stored: false, reason: `Status: ${status}, Days: ${daysUntilDrop}` };
     }
