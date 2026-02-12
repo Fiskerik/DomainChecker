@@ -38,6 +38,23 @@ const MIN_POPULARITY_SCORE = parseInt(process.env.MIN_POPULARITY_SCORE || '0', 1
 const MIN_DAYS_UNTIL_DROP = parseInt(process.env.MIN_DAYS_UNTIL_DROP || '0', 10);
 const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '5', 10);
 
+const TRENDING_KEYWORDS = [
+  'ai', 'agent', 'agents', 'gpt', 'llm', 'ml', 'automate', 'automation',
+  'saas', 'api', 'cloud', 'data', 'analytics', 'dev', 'app', 'mobile',
+  'fintech', 'pay', 'wallet', 'crypto', 'web3', 'security', 'cyber',
+  'health', 'bio', 'med', 'edu', 'learn', 'shop', 'store', 'market',
+  'creator', 'video', 'stream', 'game'
+];
+
+const STRONG_COMMERCIAL_KEYWORDS = [
+  'pay', 'bank', 'invest', 'trade', 'finance', 'loan', 'insure',
+  'shop', 'store', 'cart', 'deal', 'book', 'travel', 'job', 'legal',
+  'health', 'clinic', 'doctor', 'learn', 'course', 'school', 'academy',
+  'agency', 'studio', 'labs', 'hub', 'pro'
+];
+
+const PREFERRED_TLDS = ['com', 'io', 'ai', 'app', 'co', 'dev', 'org'];
+
 //const { isActuallyExpiring } = require('../lib/whois-validator.ts');
 
 
@@ -112,23 +129,23 @@ async function fetchDropCatchDomains() {
     })
     .filter(Boolean);
 
-    const dropWindowDomains = parsedDomains.filter((domain) => {
-      const daysUntilDrop = calculateDaysUntilDrop(domain.dropDate);
-      return daysUntilDrop >= MIN_DAYS_UNTIL_DROP && daysUntilDrop <= MAX_DAYS_UNTIL_DROP;
-    });
-
-    const rankedDomains = dropWindowDomains
+    const rankedDomains = parsedDomains
       .map((domain) => ({
         ...domain,
         popularityScore: calculatePopularityScore(domain.domainName),
       }))
       .filter((domain) => domain.popularityScore >= MIN_POPULARITY_SCORE)
       .sort((a, b) => b.popularityScore - a.popularityScore)
+      .filter((domain) => {
+        const daysUntilDrop = calculateDaysUntilDrop(domain.dropDate);
+        return daysUntilDrop >= MIN_DAYS_UNTIL_DROP && daysUntilDrop <= MAX_DAYS_UNTIL_DROP;
+      })
       .slice(0, MAX_DOMAINS_TO_STORE)
       .map(({ popularityScore, ...domain }) => domain);
 
     console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV`);
-    console.log(`🗓️  Domains in drop window (${MIN_DAYS_UNTIL_DROP}-${MAX_DAYS_UNTIL_DROP} days): ${dropWindowDomains.length}`);
+    console.log(`🧮 Ranked all domains first using enhanced popularity scoring`);
+    console.log(`🗓️  Kept only domains in drop window (${MIN_DAYS_UNTIL_DROP}-${MAX_DAYS_UNTIL_DROP} days)`);
     console.log(`📈 Selected top ${rankedDomains.length} domains by popularity score (min ${MIN_POPULARITY_SCORE}, max ${MAX_DOMAINS_TO_STORE})\n`);
     return rankedDomains;
 
@@ -199,18 +216,47 @@ function determineStatus(expiryDate) {
  * Calculate popularity score
  */
 function calculatePopularityScore(domainName) {
-  const name = domainName.split('.')[0].toLowerCase();
-  let score = 50;
-  
-  if (name.length <= 5) score += 30;
-  else if (name.length <= 8) score += 20;
-  else if (name.length <= 10) score += 10;
-  
-  const trending = ['ai', 'ml', 'crypto', 'nft', 'web3', 'saas', 'app', 'dev', 'tech', 'cloud', 'data', 'api', 'pay', 'shop', 'game'];
-  if (trending.some(kw => name.includes(kw))) score += 25;
-  
-  if (!name.includes('-') && !/\d/.test(name)) score += 10;
-  
+  const [rawName = '', rawTld = ''] = domainName.toLowerCase().split('.');
+  const tld = rawTld.trim();
+  const name = rawName.trim();
+  let score = 45;
+
+  if (!name) return 0;
+
+  if (name.length <= 4) score += 35;
+  else if (name.length <= 6) score += 28;
+  else if (name.length <= 9) score += 20;
+  else if (name.length <= 12) score += 10;
+  else score -= 10;
+
+  const matchedTrending = TRENDING_KEYWORDS.filter((kw) => name.includes(kw));
+  score += Math.min(24, matchedTrending.length * 8);
+
+  const matchedCommercial = STRONG_COMMERCIAL_KEYWORDS.filter((kw) => name.includes(kw));
+  score += Math.min(16, matchedCommercial.length * 8);
+
+  if (PREFERRED_TLDS.includes(tld)) {
+    score += tld === 'com' ? 14 : 8;
+  } else {
+    score -= 12;
+  }
+
+  if (!name.includes('-')) score += 5;
+  else score -= 14;
+
+  const digitCount = (name.match(/\d/g) || []).length;
+  if (digitCount === 0) score += 6;
+  else if (digitCount >= 2) score -= 10;
+
+  const vowelCount = (name.match(/[aeiou]/g) || []).length;
+  const vowelRatio = vowelCount / name.length;
+  if (vowelRatio < 0.2 || vowelRatio > 0.75) score -= 10;
+
+  const consonantClusters = name.match(/[bcdfghjklmnpqrstvwxyz]{4,}/g);
+  if (consonantClusters) score -= consonantClusters.length * 8;
+
+  if (/(.)\1\1/.test(name)) score -= 8;
+
   return Math.min(100, Math.max(0, score));
 }
 
