@@ -83,41 +83,32 @@ export function getNamecheapAffiliateUrl(domainName: string): string {
  */
 export function getDropCatchAffiliateUrl(domainName: string): string {
   const affiliateId = process.env.NEXT_PUBLIC_DROPCATCH_AFF_ID || '';
-  
-  // DropCatch domain backorder page - CORRECT FORMAT
   const baseUrl = `https://www.dropcatch.com/domain/${encodeURIComponent(domainName)}`;
-  
-  // Add affiliate ID if available
   return affiliateId ? `${baseUrl}?aff=${affiliateId}` : baseUrl;
 }
 
 /**
  * Get DynaDot affiliate URL
- * Uses all-in-one tracking link with domain parameter
  */
 export function getDynaDotAffiliateUrl(domainName: string): string {
-  // Your custom tracking link from DynaDot
   return `https://www.dynadot.com/?rsc=domainchecker&rsctrn=domainchecker&rscreg=domainchecker&rsceh=domainchecker&rscsb=domainchecker&rscco=domainchecker&rscbo=domainchecker&domain=${encodeURIComponent(domainName)}`;
 }
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Uses Commission Junction (CJ) affiliate network with deep linking to search
+ * Fixad version för att undvika "Offer not found"
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
+  // Baserat på din bild: PID=7870539, AID=1513033
   const advertiserId = process.env.NEXT_PUBLIC_GODADDY_ADVERTISER_ID || '1513033';
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
   
-  // The specific GoDaddy search landing page
-  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos1&utm_source=cj&utm_medium=affiliate&utm_campaign=api_search`;
+  // Destinationen hos GoDaddy som utför sökningen
+  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos1`;
   
-  // Construct CJ Deep Link
-  // Format: click-[PID]-[AID]?url=[DESTINATION]
-  if (publisherId) {
-    return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
-  }
-  
-  return destinationUrl;
+  // CJ kräver ofta jdoqocy.com eller anrdoezrs.net för deep links
+  // Vi använder den rekommenderade strukturen: click-[PID]-[AID]?url=[DESTINATION]
+  return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
 }
 
 /**
@@ -133,20 +124,6 @@ export interface AffiliateOption {
 
 export function getAllAffiliateOptions(domainName: string): AffiliateOption[] {
   return [
-    {
-      name: 'DropCatch',
-      price: '$59',
-      url: getDropCatchAffiliateUrl(domainName),
-      type: 'backorder',
-      commission: '~$9 (15%)',
-    },
-    {
-      name: 'SnapNames',
-      price: '$69',
-      url: `https://www.snapnames.com/search?query=${encodeURIComponent(domainName)}`,
-      type: 'backorder',
-      commission: '~$10 (15%)',
-    },
     {
       name: 'GoDaddy',
       price: '$24.99',
