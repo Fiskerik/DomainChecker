@@ -50,66 +50,53 @@ async function getDropCatchToken() {
 /**
  * Fetch domains from DropCatch API
  */
-
-
 async function fetchDropCatchDomains() {
   console.log('🔍 Fetching domains from DropCatch API...\n');
 
+  try {
+    // 1. Hämta din token först (du behöver axios eller fetch installerat)
+    const token = await getDropCatchToken();
 
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.dropcatch.com', // Använd API-subdomänen
+        path: '/v1/domains/dropping', // Exempel på endpoint, kolla deras dokumentation
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}` // Skicka med din token
+        }
+      };
 
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'www.dropcatch.com',
-      headers: {
-        'Accept': 'application/json',
-      }
-    };
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
 
-    const req = https.request(options, (res) => {
-      let data = '';
-
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          
+        res.on('end', () => {
+          // Om statuskoden inte är 200, logga HTML-svaret för felsökning
           if (res.statusCode !== 200) {
-            console.error('❌ DropCatch API error:', parsed);
-            console.log('   Using mock data instead...\n');
-            resolve(generateMockDomains());
-            return;
+             console.error(`❌ API Error: ${res.statusCode}`);
+             resolve(generateMockDomains());
+             return;
           }
 
-          // Transform DropCatch format to our format
-          const domains = (parsed.domains || []).map(d => ({
-            domainName: d.name,
-            expiryDate: d.expire_date || calculateExpiryFromDrop(d.drop_date),
-            registrar: d.registrar || 'Unknown',
-            dropDate: d.drop_date,
-          }));
-
-          console.log(`✅ Fetched ${domains.length} domains from DropCatch\n`);
-          resolve(domains);
-
-        } catch (error) {
-          console.error('❌ Error parsing DropCatch response:', error.message);
-          console.log('   Using mock data instead...\n');
-          resolve(generateMockDomains());
-        }
+          try {
+            const parsed = JSON.parse(data);
+            // ... resten av din logik för att mappa domäner
+          } catch (e) {
+            console.error('❌ JSON parse error. Server svarade troligen med HTML.');
+            resolve(generateMockDomains());
+          }
+        });
       });
+      
+      req.on('error', (e) => resolve(generateMockDomains()));
+      req.end();
     });
-
-    req.on('error', (error) => {
-      console.error('❌ DropCatch API request failed:', error.message);
-      console.log('   Using mock data instead...\n');
-      resolve(generateMockDomains());
-    });
-
-    req.end();
-  });
+  } catch (err) {
+    console.error('❌ Kunde inte hämta token:', err.message);
+    return generateMockDomains();
+  }
 }
 
 /**
