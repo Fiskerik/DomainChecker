@@ -79,7 +79,7 @@ async function fetchDropCatchDomains() {
 
   const token = await getDropCatchToken();
 
-  const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut1?fileType=Csv', {
+  const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut0?fileType=Csv', {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json, text/plain, */*',
