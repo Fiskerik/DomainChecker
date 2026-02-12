@@ -96,7 +96,7 @@ async function fetchDropCatchDomains() {
       };
     })
     .filter(Boolean)
-    .slice(0, 100); // <--- LÄGG TILL DENNA RAD HÄR
+    .slice(0, 250); // <--- LÄGG TILL DENNA RAD HÄR
 
     console.log(`✅ Successfully processed ${domains.length} domains from DropCatch CSV\n`);
     return domains;
