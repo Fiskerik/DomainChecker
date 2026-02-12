@@ -94,6 +94,8 @@ async function queryNamecheapAvailability(domainName) {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
+      Referer: 'https://www.namecheap.com/',
+      DNT: '1',
     },
     responseType: 'text',
   });
@@ -135,6 +137,17 @@ async function getNamecheapStatus(domainName) {
     console.log(`   ℹ️  Namecheap status: ${availability}`);
     return availability;
   } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const statusText = error.response?.statusText;
+      const responseBody = String(error.response?.data || '').slice(0, 200).replace(/\s+/g, ' ');
+
+      if (status === 403) {
+        console.log(`   ⚠️  Namecheap returned 403 Forbidden for ${domainName} (likely anti-bot/CDN protection).`);
+      }
+
+      console.log(`   🧪 Namecheap error diagnostics: status=${status || 'none'} statusText=${statusText || 'none'} bodyPreview="${responseBody || 'none'}"`);
+    }
     console.log(`   ⚠️  Namecheap availability check failed: ${error.message}`);
     return 'unknown';
   }
