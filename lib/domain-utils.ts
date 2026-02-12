@@ -91,7 +91,7 @@ export function getDropCatchAffiliateUrl(domainName: string): string {
   // Add affiliate ID if available
   return affiliateId ? `${baseUrl}?aff=${affiliateId}` : baseUrl;
 }
-}
+
 
 /**
  * Get GoDaddy affiliate URL via CJ
