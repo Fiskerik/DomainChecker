@@ -96,23 +96,18 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Använder GoDaddys egna omdirigering för att garantera att sökningen triggas korrekt
+ * Testar en förenklad version för att undvika att länken "fastnar" i omdirigeringar
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
-  // Miljövariabler från din bild
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
-  const advertiserId = '15060776'; // Det nya AID-numret från din senaste Deep Link
+  const advertiserId = '15060776'; 
   
-  // 1. Skapa den slutgiltiga sök-URL:en hos GoDaddy
-  const searchUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}`;
+  // Vi skapar sök-URL:en direkt med dina kampanjparametrar (isc=cjcdbs)
+  // Detta gör att GoDaddy ser att det är en affiliate-sökning direkt vid landning.
+  const directSearchUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcdbs&cjelbDays=45`;
 
-  // 2. Skapa GoDaddys interna affiliate-omdirigering
-  // Denna tar sök-URL:en som en parameter och ser till att sökningen körs
-  const godaddyRedirect = `https://click.godaddy.com/affiliate?isc=cjcdbs&url=${encodeURIComponent(searchUrl)}&cjelbDays=45`;
-
-  // 3. Bädda in allt i CJ Affiliates Deep Link-format
-  // Vi använder dpbolvw.net som är CJ:s domän för stabila omdirigeringar
-  return `https://www.dpbolvw.net/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(godaddyRedirect)}`;
+  // Vi använder 'jdoqocy.com' som ofta är mer stabil för direkta deep-links hos GoDaddy
+  return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(directSearchUrl)}`;
 }
 
 /**
