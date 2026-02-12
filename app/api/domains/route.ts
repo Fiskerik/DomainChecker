@@ -6,6 +6,54 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+type DomainRecord = {
+  id: number;
+  domain_name: string;
+  [key: string]: any;
+};
+
+async function getLiveAvailability(domainName: string): Promise<'available' | 'registered' | 'unknown'> {
+  try {
+    const response = await fetch(`https://dns.google/resolve?name=${domainName}&type=A`, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      console.log(`[availability-check] ${domainName}: dns lookup failed with status ${response.status}`);
+      return 'unknown';
+    }
+
+    const data = await response.json();
+
+    if (Array.isArray(data?.Answer) && data.Answer.length > 0) {
+      console.log(`[availability-check] ${domainName}: registered (DNS records found)`);
+      return 'registered';
+    }
+
+    console.log(`[availability-check] ${domainName}: available (no DNS A records)`);
+    return 'available';
+  } catch (error) {
+    console.log(`[availability-check] ${domainName}: lookup error`, error);
+    return 'unknown';
+  }
+}
+
+async function filterOutRegisteredDomains(domains: DomainRecord[]): Promise<DomainRecord[]> {
+  const checkedDomains = await Promise.all(
+    domains.map(async (domain) => {
+      const availability = await getLiveAvailability(domain.domain_name);
+
+      if (availability === 'registered') {
+        return null;
+      }
+
+      return domain;
+    })
+  );
+
+  return checkedDomains.filter((domain): domain is DomainRecord => domain !== null);
+}
+
 /**
  * GET /api/domains
  * 
@@ -39,6 +87,7 @@ export async function GET(request: Request) {
     const sort = searchParams.get('sort') || 'days_until_drop';
     const order = searchParams.get('order') === 'desc' ? 'desc' : 'asc';
     const search = searchParams.get('search');
+    const availableOnly = searchParams.get('available_only') !== 'false';
     
     // Build query
     let query = supabase
@@ -93,12 +142,22 @@ export async function GET(request: Request) {
       );
     }
     
+    let domains = (data || []) as DomainRecord[];
+    let filteredCount = count || 0;
+
+    if (availableOnly && search && domains.length > 0) {
+      console.log(`[domains-api] Running live availability filter for search="${search}" on ${domains.length} domains`);
+      domains = await filterOutRegisteredDomains(domains);
+      filteredCount = domains.length;
+      console.log(`[domains-api] Availability filter removed ${((data || []).length - domains.length)} registered domains`);
+    }
+
     return NextResponse.json({
-      domains: data,
-      count,
+      domains,
+      count: filteredCount,
       limit,
       offset,
-      hasMore: offset + limit < (count || 0),
+      hasMore: offset + limit < filteredCount,
     });
     
   } catch (error) {
