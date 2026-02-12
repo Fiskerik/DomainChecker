@@ -33,7 +33,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const { isActuallyExpiring } = require('../lib/whois-validator.ts');
+const MAX_DOMAINS_TO_STORE = parseInt(process.env.MAX_DOMAINS_TO_STORE || '300', 10);
+const MIN_POPULARITY_SCORE = parseInt(process.env.MIN_POPULARITY_SCORE || '0', 10);
+const MIN_DAYS_UNTIL_DROP = parseInt(process.env.MIN_DAYS_UNTIL_DROP || '0', 10);
+const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '5', 10);
+
+const TRENDING_KEYWORDS = [
+  'ai', 'agent', 'agents', 'gpt', 'llm', 'ml', 'automate', 'automation',
+  'saas', 'api', 'cloud', 'data', 'analytics', 'dev', 'app', 'mobile',
+  'fintech', 'pay', 'wallet', 'crypto', 'web3', 'security', 'cyber',
+  'health', 'bio', 'med', 'edu', 'learn', 'shop', 'store', 'market',
+  'creator', 'video', 'stream', 'game'
+];
+
+const STRONG_COMMERCIAL_KEYWORDS = [
+  'pay', 'bank', 'invest', 'trade', 'finance', 'loan', 'insure',
+  'shop', 'store', 'cart', 'deal', 'book', 'travel', 'job', 'legal',
+  'health', 'clinic', 'doctor', 'learn', 'course', 'school', 'academy',
+  'agency', 'studio', 'labs', 'hub', 'pro'
+];
+
+const PREFERRED_TLDS = ['com', 'io', 'ai', 'app', 'co', 'dev', 'org'];
+
+//const { isActuallyExpiring } = require('../lib/whois-validator.ts');
 
 
 
@@ -78,32 +100,58 @@ async function fetchDropCatchDomains() {
     const csvData = zipEntries[0].getData().toString('utf8');
     const records = parse(csvData, { columns: true, skip_empty_lines: true });
 
-    const domains = records.map(row => {
-      // DropCatch CSV-kolumner kan heta olika saker, vi kollar de vanligaste:
-      const rawName = row.DomainName || row.name || row.Domain;
-      const rawDropDate = row.DropDate || row.drop_date;
+    if (records.length > 0) {
+      const sampleKeys = Object.keys(records[0]);
+      console.log(`🧪 CSV diagnostics: ${records.length} rows, columns: ${sampleKeys.join(', ')}`);
+    }
 
-      // Säkerställ att vi har ett giltigt datum för att undvika "Invalid time value"
-      let validDropDate = rawDropDate;
-      if (!rawDropDate || isNaN(new Date(rawDropDate).getTime())) {
-        // Om datum saknas eller är korrupt, sätt det till 10 dagar framåt som fallback
-        const fallback = new Date();
-        fallback.setDate(fallback.getDate() + 10);
-        validDropDate = fallback.toISOString().split('T')[0];
+    const parsedDomains = records.map((row, index) => {
+      // DropCatch CSV-kolumner kan heta olika saker.
+      const domainKey = Object.keys(row).find((key) => /domain|name/i.test(key));
+      const dropDateKey = Object.keys(row).find((key) => /drop/i.test(key) && /date|dt|time/i.test(key));
+
+      const rawName = row.DomainName || row.Domain || row.domain || row.name || (domainKey ? row[domainKey] : undefined);
+      const rawDropDate = row.DropDate || row.drop_date || row.DropDateUtc || row.dropDate || (dropDateKey ? row[dropDateKey] : undefined);
+      const validDropDate = normalizeDate(rawDropDate);
+
+      if (!validDropDate) {
+        if (index < 20) {
+          console.log(`⚠️  Skipping ${rawName || 'unknown'} due to invalid drop date: ${rawDropDate}`);
+        }
+        return null;
       }
 
+      const normalizedDomainName = (rawName || '').trim().toLowerCase();
+      if (!normalizedDomainName) return null;
+
       return {
-        domainName: rawName,
+        domainName: normalizedDomainName,
         dropDate: validDropDate,
         expiryDate: calculateExpiryFromDrop(validDropDate),
         registrar: row.Registrar || 'Unknown'
       };
     })
-    .filter(d => d.domainName) // Ta bort eventuella tomma rader
-    .slice(0, 100); // <--- LÄGG TILL DENNA RAD HÄR
+    .filter(Boolean);
 
-    console.log(`✅ Successfully processed ${domains.length} domains from DropCatch CSV\n`);
-    return domains;
+    const rankedDomains = parsedDomains
+      .map((domain) => ({
+        ...domain,
+        popularityScore: calculatePopularityScore(domain.domainName),
+      }))
+      .filter((domain) => domain.popularityScore >= MIN_POPULARITY_SCORE)
+      .sort((a, b) => b.popularityScore - a.popularityScore)
+      .filter((domain) => {
+        const daysUntilDrop = calculateDaysUntilDrop(domain.dropDate);
+        return daysUntilDrop >= MIN_DAYS_UNTIL_DROP && daysUntilDrop <= MAX_DAYS_UNTIL_DROP;
+      })
+      .slice(0, MAX_DOMAINS_TO_STORE)
+      .map(({ popularityScore, ...domain }) => domain);
+
+    console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV`);
+    console.log(`🧮 Ranked all domains first using enhanced popularity scoring`);
+    console.log(`🗓️  Kept only domains in drop window (${MIN_DAYS_UNTIL_DROP}-${MAX_DAYS_UNTIL_DROP} days)`);
+    console.log(`📈 Selected top ${rankedDomains.length} domains by popularity score (min ${MIN_POPULARITY_SCORE}, max ${MAX_DOMAINS_TO_STORE})\n`);
+    return rankedDomains;
 
   } catch (error) {
     console.error('❌ Misslyckades att hämta DropCatch-data:', error.message);
@@ -119,6 +167,18 @@ function calculateExpiryFromDrop(dropDate) {
   const drop = new Date(dropDate);
   drop.setDate(drop.getDate() - 75);
   return drop.toISOString().split('T')[0];
+}
+
+/**
+ * Normalize and validate date input (YYYY-MM-DD output)
+ */
+function normalizeDate(rawDate) {
+  if (!rawDate) return null;
+
+  const parsed = new Date(rawDate);
+  if (isNaN(parsed.getTime())) return null;
+
+  return parsed.toISOString().split('T')[0];
 }
 
 /**
@@ -160,18 +220,47 @@ function determineStatus(expiryDate) {
  * Calculate popularity score
  */
 function calculatePopularityScore(domainName) {
-  const name = domainName.split('.')[0].toLowerCase();
-  let score = 50;
-  
-  if (name.length <= 5) score += 30;
-  else if (name.length <= 8) score += 20;
-  else if (name.length <= 10) score += 10;
-  
-  const trending = ['ai', 'ml', 'crypto', 'nft', 'web3', 'saas', 'app', 'dev', 'tech', 'cloud', 'data', 'api', 'pay', 'shop', 'game'];
-  if (trending.some(kw => name.includes(kw))) score += 25;
-  
-  if (!name.includes('-') && !/\d/.test(name)) score += 10;
-  
+  const [rawName = '', rawTld = ''] = domainName.toLowerCase().split('.');
+  const tld = rawTld.trim();
+  const name = rawName.trim();
+  let score = 45;
+
+  if (!name) return 0;
+
+  if (name.length <= 4) score += 35;
+  else if (name.length <= 6) score += 28;
+  else if (name.length <= 9) score += 20;
+  else if (name.length <= 12) score += 10;
+  else score -= 10;
+
+  const matchedTrending = TRENDING_KEYWORDS.filter((kw) => name.includes(kw));
+  score += Math.min(24, matchedTrending.length * 8);
+
+  const matchedCommercial = STRONG_COMMERCIAL_KEYWORDS.filter((kw) => name.includes(kw));
+  score += Math.min(16, matchedCommercial.length * 8);
+
+  if (PREFERRED_TLDS.includes(tld)) {
+    score += tld === 'com' ? 14 : 8;
+  } else {
+    score -= 12;
+  }
+
+  if (!name.includes('-')) score += 5;
+  else score -= 14;
+
+  const digitCount = (name.match(/\d/g) || []).length;
+  if (digitCount === 0) score += 6;
+  else if (digitCount >= 2) score -= 10;
+
+  const vowelCount = (name.match(/[aeiou]/g) || []).length;
+  const vowelRatio = vowelCount / name.length;
+  if (vowelRatio < 0.2 || vowelRatio > 0.75) score -= 10;
+
+  const consonantClusters = name.match(/[bcdfghjklmnpqrstvwxyz]{4,}/g);
+  if (consonantClusters) score -= consonantClusters.length * 8;
+
+  if (/(.)\1\1/.test(name)) score -= 8;
+
   return Math.min(100, Math.max(0, score));
 }
 
@@ -235,13 +324,17 @@ function generateMockDomains() {
 async function upsertDomain(domainData) {
   try {
     const { domainName, expiryDate, registrar } = domainData;
+
+    const normalizedExpiryDate = normalizeDate(expiryDate);
+    if (!normalizedExpiryDate) {
+      return { stored: false, reason: `Invalid expiry date: ${expiryDate}` };
+    }
     
-    const dropDate = domainData.dropDate || calculateDropDate(expiryDate);
+    const dropDate = normalizeDate(domainData.dropDate) || calculateDropDate(normalizedExpiryDate);
     const daysUntilDrop = calculateDaysUntilDrop(dropDate);
-    const status = determineStatus(expiryDate);
+    const status = determineStatus(normalizedExpiryDate);
     
-    // Only store pending_delete domains (5-15 days window)
-    if (status !== 'pending_delete' || daysUntilDrop < 5 || daysUntilDrop > 15) {
+    if (daysUntilDrop < MIN_DAYS_UNTIL_DROP || daysUntilDrop > MAX_DAYS_UNTIL_DROP) {
       return { stored: false, reason: `Out of range: ${status}, ${daysUntilDrop}d` };
     }
     
@@ -256,7 +349,7 @@ async function upsertDomain(domainData) {
       .upsert({
         domain_name: domainName,
         tld,
-        expiry_date: expiryDate,
+        expiry_date: normalizedExpiryDate,
         drop_date: dropDate,
         days_until_drop: daysUntilDrop,
         status,
@@ -283,17 +376,31 @@ async function upsertDomain(domainData) {
 }
 async function quickCheck(domainName) {
   try {
-    const response = await fetch(`https://dns.google/resolve?name=${domainName}&type=A`);
-    const data = await response.json();
-    
-    // If DNS exists, domain is registered
-    if (data.Answer && data.Answer.length > 0) {
-      return false; // Skip - still registered
+    const [aResponse, nsResponse, soaResponse] = await Promise.all([
+      fetch(`https://dns.google/resolve?name=${domainName}&type=A`),
+      fetch(`https://dns.google/resolve?name=${domainName}&type=NS`),
+      fetch(`https://dns.google/resolve?name=${domainName}&type=SOA`),
+    ]);
+
+    const [aData, nsData, soaData] = await Promise.all([
+      aResponse.json(),
+      nsResponse.json(),
+      soaResponse.json(),
+    ]);
+
+    // If DNS resolves (A/NS/SOA or Status=0), the domain is almost certainly taken.
+    const hasRecords = [aData, nsData, soaData].some(data => Array.isArray(data.Answer) && data.Answer.length > 0);
+    const hasNoError = [aData, nsData, soaData].some(data => data.Status === 0);
+
+    if (hasRecords || hasNoError) {
+      console.log(`   WHOIS filter: skip taken domain ${domainName}`);
+      return false;
     }
-    
-    return true; // OK to add
+
+    return true;
   } catch (error) {
-    return true; // On error, include it
+    console.log(`   WHOIS filter warning (${domainName}): ${error.message}`);
+    return true;
   }
 }
 /**
@@ -306,12 +413,13 @@ async function main() {
   
   try {
     const domains = await fetchDropCatchDomains();
-    console.log(`📦 Processing ${domains.length} domains...\n`);
+    const limitedDomains = domains.slice(0, MAX_DOMAINS_TO_STORE);
+    console.log(`📦 Processing ${limitedDomains.length} domains (hard cap: ${MAX_DOMAINS_TO_STORE})...\n`);
     
     let stored = 0;
     let skipped = 0;
     
-    for (const domain of domains) {
+    for (const domain of limitedDomains) {
     const isExpiring = await quickCheck(domain.domainName);
     if (!isExpiring) {
       skipped++;
@@ -325,6 +433,11 @@ async function main() {
         console.log(`   ✅ ${d.domain_name.padEnd(30)} | ${d.days_until_drop}d | ${d.popularity_score}/100`);
       } else {
         skipped++;
+        if (result.reason) {
+          console.log(`   ℹ️  Skip ${domain.domainName}: ${result.reason}`);
+        } else if (result.error) {
+          console.log(`   ⚠️  Error ${domain.domainName}: ${result.error}`);
+        }
       }
     }
     
