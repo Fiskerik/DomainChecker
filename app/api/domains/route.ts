@@ -64,6 +64,7 @@ async function filterOutRegisteredDomains(domains: DomainRecord[]): Promise<Doma
  * - tld: Filter by TLD (e.g., 'com', 'io')
  * - category: Filter by category (e.g., 'tech', 'finance')
  * - min_score: Minimum popularity score (0-100)
+ * - max_score: Maximum popularity score (0-100)
  * - days_min: Minimum days until drop
  * - days_max: Maximum days until drop
  * - limit: Number of results (default: 50, max: 100)
@@ -80,6 +81,7 @@ export async function GET(request: Request) {
     const tld = searchParams.get('tld');
     const category = searchParams.get('category');
     const minScore = parseInt(searchParams.get('min_score') || '0');
+    const maxScore = parseInt(searchParams.get('max_score') || '100');
     const daysMin = parseInt(searchParams.get('days_min') || '0');
     const daysMax = parseInt(searchParams.get('days_max') || '100');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
@@ -106,6 +108,10 @@ export async function GET(request: Request) {
     
     if (minScore > 0) {
       query = query.gte('popularity_score', minScore);
+    }
+
+    if (maxScore < 100) {
+      query = query.lte('popularity_score', maxScore);
     }
     
     if (daysMin > 0) {

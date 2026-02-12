@@ -21,6 +21,20 @@ export function FilterBar({
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const minScore = Number(filters.min_score ?? 0);
+  const maxScore = Number(filters.max_score ?? 100);
+
+  const updateScoreRange = (nextMin: number, nextMax: number) => {
+    const normalizedMin = Math.max(0, Math.min(nextMin, nextMax));
+    const normalizedMax = Math.min(100, Math.max(nextMin, nextMax));
+
+    onFilterChange({
+      ...filters,
+      min_score: normalizedMin > 0 ? normalizedMin : undefined,
+      max_score: normalizedMax < 100 ? normalizedMax : undefined,
+    });
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await onRefresh();
@@ -101,6 +115,38 @@ export function FilterBar({
           </div>
         </div>
 
+        {/* Popularity Range Filter */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-gray-700">Popularity Score</label>
+            <span className="text-xs text-gray-500 font-medium">
+              {minScore} - {maxScore}
+            </span>
+          </div>
+
+          <div className="relative h-8">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={minScore}
+              onChange={(e) => updateScoreRange(Number(e.target.value), maxScore)}
+              className="absolute pointer-events-auto w-full h-2 appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-blue-600 [&::-moz-range-thumb]:cursor-pointer"
+              aria-label="Minimum popularity score"
+            />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={maxScore}
+              onChange={(e) => updateScoreRange(minScore, Number(e.target.value))}
+              className="absolute pointer-events-auto w-full h-2 appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-indigo-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-indigo-600 [&::-moz-range-thumb]:cursor-pointer"
+              aria-label="Maximum popularity score"
+            />
+            <div className="absolute top-3 left-0 right-0 h-1 bg-gray-200 rounded pointer-events-none" />
+          </div>
+        </div>
+
         {/* Sort Options */}
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
           <div className="sm:col-span-5">
@@ -160,7 +206,7 @@ export function FilterBar({
         </div>
 
         {/* Active Filters */}
-        {(filters.tld || filters.category || filters.search) && (
+        {(filters.tld || filters.category || filters.search || filters.min_score !== undefined || filters.max_score !== undefined) && (
           <div className="pt-2 border-t border-gray-100">
             <div className="flex items-center justify-between">
               <div className="flex flex-wrap gap-2">
@@ -200,11 +246,22 @@ export function FilterBar({
                     </button>
                   </span>
                 )}
+                {(filters.min_score !== undefined || filters.max_score !== undefined) && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                    Score {minScore}-{maxScore}
+                    <button
+                      onClick={() => onFilterChange({ ...filters, min_score: undefined, max_score: undefined })}
+                      className="ml-1.5 hover:text-emerald-900"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => {
                   setSearch('');
-                  onFilterChange({});
+                  onFilterChange({ sort: 'days_until_drop', order: 'asc' });
                 }}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
