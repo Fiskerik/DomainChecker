@@ -25,8 +25,10 @@ export function FilterBar({
   const maxScore = Number(filters.max_score ?? 100);
 
   const updateScoreRange = (nextMin: number, nextMax: number) => {
-    const normalizedMin = Math.max(0, Math.min(nextMin, nextMax));
-    const normalizedMax = Math.min(100, Math.max(nextMin, nextMax));
+    const safeMin = Number.isFinite(nextMin) ? nextMin : 0;
+    const safeMax = Number.isFinite(nextMax) ? nextMax : 100;
+    const normalizedMin = Math.max(0, Math.min(Math.round(safeMin), Math.round(safeMax)));
+    const normalizedMax = Math.min(100, Math.max(Math.round(safeMin), Math.round(safeMax)));
 
     onFilterChange({
       ...filters,
@@ -124,26 +126,31 @@ export function FilterBar({
             </span>
           </div>
 
-          <div className="relative h-8">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={minScore}
-              onChange={(e) => updateScoreRange(Number(e.target.value), maxScore)}
-              className="absolute pointer-events-auto w-full h-2 appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-blue-600 [&::-moz-range-thumb]:cursor-pointer"
-              aria-label="Minimum popularity score"
-            />
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={maxScore}
-              onChange={(e) => updateScoreRange(minScore, Number(e.target.value))}
-              className="absolute pointer-events-auto w-full h-2 appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-indigo-600 [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-indigo-600 [&::-moz-range-thumb]:cursor-pointer"
-              aria-label="Maximum popularity score"
-            />
-            <div className="absolute top-3 left-0 right-0 h-1 bg-gray-200 rounded pointer-events-none" />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] font-medium text-gray-500 mb-1 block">Min</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={minScore}
+                onChange={(e) => updateScoreRange(Number(e.target.value), maxScore)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                aria-label="Minimum popularity score"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-gray-500 mb-1 block">Max</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={maxScore}
+                onChange={(e) => updateScoreRange(minScore, Number(e.target.value))}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                aria-label="Maximum popularity score"
+              />
+            </div>
           </div>
         </div>
 
