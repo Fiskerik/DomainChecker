@@ -29,7 +29,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-
+const { isActuallyExpiring } = require('../lib/whois-validator.ts');
 
 
 
@@ -281,7 +281,21 @@ async function upsertDomain(domainData) {
     return { stored: false, error: error.message };
   }
 }
-
+async function quickCheck(domainName) {
+  try {
+    const response = await fetch(`https://dns.google/resolve?name=${domainName}&type=A`);
+    const data = await response.json();
+    
+    // If DNS exists, domain is registered
+    if (data.Answer && data.Answer.length > 0) {
+      return false; // Skip - still registered
+    }
+    
+    return true; // OK to add
+  } catch (error) {
+    return true; // On error, include it
+  }
+}
 /**
  * Main execution
  */
@@ -298,6 +312,11 @@ async function main() {
     let skipped = 0;
     
     for (const domain of domains) {
+    const isExpiring = await quickCheck(domain.domainName);
+    if (!isExpiring) {
+      skipped++;
+      continue;
+    }
       const result = await upsertDomain(domain);
       
       if (result.stored) {
