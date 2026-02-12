@@ -231,18 +231,18 @@ async function removeNonPendingDomains() {
       console.log(`   Removed ${tooEarly.length} domains (too early - still in grace/redemption)`);
     }
     
-    // Delete pending_delete domains outside 5-15 day window
+    // Delete pending_delete domains outside 0-10 day window
     const { data: outsideWindow, error: windowError } = await supabase
       .from('domains')
       .delete()
       .eq('status', 'pending_delete')
-      .or('days_until_drop.lt.5,days_until_drop.gt.15')
+      .or('days_until_drop.lt.0,days_until_drop.gt.10')
       .select('domain_name, days_until_drop');
     
     if (windowError) {
       console.error('   ❌ Error:', windowError.message);
     } else if (outsideWindow?.length > 0) {
-      console.log(`   Removed ${outsideWindow.length} domains outside 5-15 day window`);
+      console.log(`   Removed ${outsideWindow.length} domains outside 0-10 day window`);
     }
     
     console.log('');
