@@ -37,7 +37,7 @@ const WHOIS_RETRY_ATTEMPTS = parseInt(process.env.WHOIS_RETRY_ATTEMPTS || '2', 1
 const WHOIS_RETRY_DELAY_MS = parseInt(process.env.WHOIS_RETRY_DELAY_MS || '1500', 10);
 const WHOIS_FAILURE_COOLDOWN_AFTER = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_AFTER || '10', 10);
 const WHOIS_FAILURE_COOLDOWN_MS = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_MS || '12000', 10);
-const DOMAIN_STATUS_SOURCE = (process.env.DOMAIN_STATUS_SOURCE || 'whois').toLowerCase(); // whois | namecheap
+const DOMAIN_STATUS_SOURCE = (process.env.DOMAIN_STATUS_SOURCE || 'namecheap').toLowerCase(); // namecheap | whois
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -128,15 +128,15 @@ async function queryNamecheapAvailability(domainName) {
   return 'unknown';
 }
 
-async function isAvailableOnNamecheap(domainName) {
+async function getNamecheapStatus(domainName) {
   try {
     console.log(`   🔍 Checking Namecheap availability for ${domainName}...`);
     const availability = await queryNamecheapAvailability(domainName);
     console.log(`   ℹ️  Namecheap status: ${availability}`);
-    return availability === 'available';
+    return availability;
   } catch (error) {
     console.log(`   ⚠️  Namecheap availability check failed: ${error.message}`);
-    return false;
+    return 'unknown';
   }
 }
 
@@ -454,10 +454,6 @@ function isWhoisClearlyRegistered(result) {
 async function isActuallyExpiring(domainName, context = null) {
   if (!ENABLE_WHOIS_CHECK) return true; // Skip if disabled
 
-  if (DOMAIN_STATUS_SOURCE === 'namecheap') {
-    return isAvailableOnNamecheap(domainName);
-  }
-
   if (context) {
     context.hadWhoisError = false;
   }
@@ -465,6 +461,26 @@ async function isActuallyExpiring(domainName, context = null) {
   const progressLabel = context
     ? `[${context.currentIndex}/${context.totalDomains}] `
     : '';
+
+  const statusCheckOrder = DOMAIN_STATUS_SOURCE === 'whois'
+    ? ['whois', 'namecheap']
+    : ['namecheap', 'whois'];
+
+  console.log(`   ℹ️  Status check priority: ${statusCheckOrder.join(' -> ')}`);
+
+  if (statusCheckOrder[0] === 'namecheap') {
+    const namecheapStatus = await getNamecheapStatus(domainName);
+
+    if (namecheapStatus === 'available') {
+      return true;
+    }
+
+    if (namecheapStatus === 'taken') {
+      return false;
+    }
+
+    console.log('   ⚠️  Namecheap status unknown, falling back to WHOIS...');
+  }
   
   try {
     console.log(`   🔍 ${progressLabel}Checking WHOIS for ${domainName}...`);
@@ -517,6 +533,13 @@ async function isActuallyExpiring(domainName, context = null) {
     }
 
     console.log(`   ⚠️  WHOIS check failed: ${error.message}`);
+
+    if (statusCheckOrder[0] === 'whois') {
+      console.log('   ⚠️  WHOIS failed, falling back to Namecheap...');
+      const namecheapStatus = await getNamecheapStatus(domainName);
+      return namecheapStatus === 'available';
+    }
+
     const dnsStatus = await quickDomainCheck(domainName);
     console.log(`   ℹ️  DNS fallback status: ${dnsStatus}`);
     // Conservative strategy: do not accept domains when WHOIS fails.
