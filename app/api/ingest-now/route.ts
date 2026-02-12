@@ -1,38 +1,35 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
+import AdmZip from 'adm-zip';
+import { parse } from 'csv-parse/sync';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/**
- * GET /api/ingest-now
- * 
- * Manually trigger domain ingestion
- * Add ?secret=YOUR_SECRET to protect this endpoint
- */
 export async function GET(request: Request) {
-  // Optional: Protect with a secret
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret');
   
-  // Set this in your Vercel env vars
   if (process.env.INGEST_SECRET && secret !== process.env.INGEST_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    console.log('Starting manual ingestion...');
+    console.log('Starting live ingestion from DropCatch...');
     
-    // Generate mock domains for now
-    // Replace this with actual WhoisXML API call in production
-    const mockDomains = generateMockDomains();
+    // 1. Hämta domäner från DropCatch API
+    const liveDomains = await fetchDropCatchData();
+    
+    // Begränsa till 100 för att undvika timeout på Vercel (Hobby plan har 10s limit)
+    const limitedDomains = liveDomains.slice(0, 100);
     
     let stored = 0;
     let skipped = 0;
     
-    for (const domain of mockDomains) {
+    for (const domain of limitedDomains) {
       const result = await upsertDomain(domain);
       if (result.stored) stored++;
       else skipped++;
@@ -40,9 +37,8 @@ export async function GET(request: Request) {
     
     return NextResponse.json({
       success: true,
-      message: `Ingested ${stored} domains, skipped ${skipped}`,
-      stored,
-      skipped,
+      message: `Ingested ${stored} domains from DropCatch, skipped ${skipped}`,
+      total_processed: limitedDomains.length
     });
     
   } catch (error: any) {
@@ -54,58 +50,72 @@ export async function GET(request: Request) {
   }
 }
 
-function generateMockDomains() {
-  const tlds = ['com', 'io', 'ai', 'app', 'dev'];
-  const prefixes = [
-    'techstart', 'aitools', 'devops', 'cloudapp', 'dataflow',
-    'payfast', 'shopnow', 'gamehub', 'fitness', 'cryptopay'
-  ];
-  
-  return prefixes.map((prefix, i) => {
-    const tld = tlds[i % tlds.length];
-    const daysAgo = 60 + Math.floor(Math.random() * 15);
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() - daysAgo);
-    
-    return {
-      domainName: `${prefix}.${tld}`,
-      expiryDate: expiryDate.toISOString().split('T')[0],
-      registrar: 'Mock Registrar Inc.',
-    };
+/**
+ * Hämtar token och laddar ner CSV från DropCatch
+ */
+async function fetchDropCatchData() {
+  // Hämta Token
+  const authRes = await axios.post('https://api.dropcatch.com/authorize', {
+    clientId: process.env.DROPCATCH_CLIENT_ID,
+    clientSecret: process.env.DROPCATCH_CLIENT_SECRET
   });
+  const token = authRes.data.token;
+
+  // Hämta ZIP med CSV (DaysOut0 = domäner som droppar idag/snart)
+  const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut0?fileType=Csv', {
+    headers: { 'Authorization': `Bearer ${token}` },
+    responseType: 'arraybuffer'
+  });
+
+  const zip = new AdmZip(Buffer.from(response.data));
+  const zipEntries = zip.getEntries();
+  const csvData = zipEntries[0].getData().toString('utf8');
+  
+  const records = parse(csvData, { columns: true, skip_empty_lines: true });
+
+  return records.map((row: any) => ({
+    domainName: row.DomainName || row.Domain,
+    dropDate: row.DropDate,
+    registrar: row.Registrar || 'DropCatch'
+  }));
 }
 
 async function upsertDomain(domainData: any) {
   try {
-    const dropDate = new Date(domainData.expiryDate);
-    dropDate.setDate(dropDate.getDate() + 75);
+    const dropDate = new Date(domainData.dropDate);
+    const today = new Date();
     
-    const daysUntilDrop = Math.floor(
-      (dropDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    const daysUntilDrop = Math.ceil(
+      (dropDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
     );
     
-    // Only store if in pending_delete range
-    if (daysUntilDrop < 5 || daysUntilDrop > 15) {
+    // Baserat på ICANN:s PendingDelete status (5 dagar)
+    // Vi sparar domäner som droppar inom kort
+    if (daysUntilDrop < 0 || daysUntilDrop > 7) {
       return { stored: false };
     }
     
-    const tld = domainData.domainName.split('.').pop();
-    const popularityScore = 50 + Math.floor(Math.random() * 50);
+    const domainName = domainData.domainName.toLowerCase();
+    const tld = domainName.split('.').pop();
     
+    // Enkel kategorisering
+    const categories = ['tech', 'finance', 'health', 'ecommerce'];
+    const category = categories.find(c => domainName.includes(c)) || 'general';
+
     const { error } = await supabase
       .from('domains')
       .upsert({
-        domain_name: domainData.domainName,
+        domain_name: domainName,
         tld,
-        expiry_date: domainData.expiryDate,
         drop_date: dropDate.toISOString().split('T')[0],
         days_until_drop: daysUntilDrop,
-        status: 'pending_delete',
+        status: 'pending_delete', // Status där domänen inte kan förnyas
         registrar: domainData.registrar,
-        popularity_score: popularityScore,
-        category: 'tech',
-        slug: domainData.domainName.replace(/\./g, '-'),
-        title: `${domainData.domainName} - Dropping in ${daysUntilDrop} Days`,
+        popularity_score: Math.floor(Math.random() * 40) + 60, // Exempelscore
+        category,
+        slug: domainName.replace(/\./g, '-'),
+        title: `${domainName} - Premium Domain Available Soon`,
+        last_updated: new Date().toISOString()
       }, {
         onConflict: 'domain_name'
       });

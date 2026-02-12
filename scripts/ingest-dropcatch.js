@@ -21,8 +21,12 @@ if (process.env.NODE_ENV !== 'production') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }
 require('dotenv').config();
+const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 const https = require('https');
+
+const AdmZip = require('adm-zip');
+const { parse } = require('csv-parse/sync');
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -50,51 +54,56 @@ async function getDropCatchToken() {
 /**
  * Fetch domains from DropCatch API
  */
+
+
 async function fetchDropCatchDomains() {
-  console.log('🔍 Fetching domains from DropCatch API...\n');
+  console.log('🔍 Fetching dropping domains file from DropCatch...\n');
 
   try {
-    // 1. Hämta din token först (du behöver axios eller fetch installerat)
     const token = await getDropCatchToken();
 
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.dropcatch.com', // Använd API-subdomänen
-        path: '/v1/domains/dropping', // Exempel på endpoint, kolla deras dokumentation
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}` // Skicka med din token
-        }
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-
-        res.on('end', () => {
-          // Om statuskoden inte är 200, logga HTML-svaret för felsökning
-          if (res.statusCode !== 200) {
-             console.error(`❌ API Error: ${res.statusCode}`);
-             resolve(generateMockDomains());
-             return;
-          }
-
-          try {
-            const parsed = JSON.parse(data);
-            // ... resten av din logik för att mappa domäner
-          } catch (e) {
-            console.error('❌ JSON parse error. Server svarade troligen med HTML.');
-            resolve(generateMockDomains());
-          }
-        });
-      });
-      
-      req.on('error', (e) => resolve(generateMockDomains()));
-      req.end();
+    const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/AllDays?fileType=Csv', {
+      headers: { 'Authorization': `Bearer ${token}` },
+      responseType: 'arraybuffer'
     });
-  } catch (err) {
-    console.error('❌ Kunde inte hämta token:', err.message);
+
+    const zip = new AdmZip(response.data);
+    const zipEntries = zip.getEntries();
+    if (zipEntries.length === 0) throw new Error('Zip file is empty');
+
+    const csvData = zipEntries[0].getData().toString('utf8');
+    const records = parse(csvData, { columns: true, skip_empty_lines: true });
+
+    const domains = records.map(row => {
+      // DropCatch CSV-kolumner kan heta olika saker, vi kollar de vanligaste:
+      const rawName = row.DomainName || row.name || row.Domain;
+      const rawDropDate = row.DropDate || row.drop_date;
+
+      // Säkerställ att vi har ett giltigt datum för att undvika "Invalid time value"
+      let validDropDate = rawDropDate;
+      if (!rawDropDate || isNaN(new Date(rawDropDate).getTime())) {
+        // Om datum saknas eller är korrupt, sätt det till 10 dagar framåt som fallback
+        const fallback = new Date();
+        fallback.setDate(fallback.getDate() + 10);
+        validDropDate = fallback.toISOString().split('T')[0];
+      }
+
+      return {
+        domainName: rawName,
+        dropDate: validDropDate,
+        expiryDate: calculateExpiryFromDrop(validDropDate),
+        registrar: row.Registrar || 'Unknown'
+      };
+    })
+    .filter(d => d.domainName) // Ta bort eventuella tomma rader
+    .slice(0, 100); // <--- LÄGG TILL DENNA RAD HÄR
+
+    console.log(`✅ Successfully processed ${domains.length} domains from DropCatch CSV\n`);
+    return domains;
+
+  } catch (error) {
+    console.error('❌ Misslyckades att hämta DropCatch-data:', error.message);
+    console.log('   Using mock data instead...\n');
     return generateMockDomains();
   }
 }
