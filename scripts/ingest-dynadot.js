@@ -24,6 +24,26 @@ const supabase = createClient(
 
 const DYNADOT_API_KEY = process.env.DYNADOT_API_KEY;
 
+const MIN_DAYS_UNTIL_DROP = parseInt(process.env.MIN_DAYS_UNTIL_DROP || '0', 10);
+const MAX_DAYS_UNTIL_DROP = parseInt(process.env.MAX_DAYS_UNTIL_DROP || '5', 10);
+
+const TRENDING_KEYWORDS = [
+  'ai', 'agent', 'agents', 'gpt', 'llm', 'ml', 'automate', 'automation',
+  'saas', 'api', 'cloud', 'data', 'analytics', 'dev', 'app', 'mobile',
+  'fintech', 'pay', 'wallet', 'crypto', 'web3', 'security', 'cyber',
+  'health', 'bio', 'med', 'edu', 'learn', 'shop', 'store', 'market',
+  'creator', 'video', 'stream', 'game'
+];
+
+const STRONG_COMMERCIAL_KEYWORDS = [
+  'pay', 'bank', 'invest', 'trade', 'finance', 'loan', 'insure',
+  'shop', 'store', 'cart', 'deal', 'book', 'travel', 'job', 'legal',
+  'health', 'clinic', 'doctor', 'learn', 'course', 'school', 'academy',
+  'agency', 'studio', 'labs', 'hub', 'pro'
+];
+
+const PREFERRED_TLDS = ['com', 'io', 'ai', 'app', 'co', 'dev', 'org'];
+
 /**
  * Calculate the drop date (typically expiry + 75 days for .com)
  */
@@ -63,27 +83,47 @@ function determineStatus(expiryDate) {
  * Simple popularity scoring algorithm
  */
 function calculatePopularityScore(domainName) {
-  const name = domainName.split('.')[0].toLowerCase();
-  let score = 50;
-  
-  // Length bonus
-  if (name.length <= 5) score += 30;
-  else if (name.length <= 8) score += 20;
-  else if (name.length <= 10) score += 10;
-  
-  // Trending keywords
-  const trendingKeywords = [
-    'ai', 'ml', 'crypto', 'nft', 'web3', 'saas', 'app', 'dev', 
-    'tech', 'cloud', 'data', 'api', 'pay', 'shop', 'game'
-  ];
-  
-  if (trendingKeywords.some(keyword => name.includes(keyword))) {
-    score += 25;
+  const [rawName = '', rawTld = ''] = domainName.toLowerCase().split('.');
+  const tld = rawTld.trim();
+  const name = rawName.trim();
+  let score = 45;
+
+  if (!name) return 0;
+
+  if (name.length <= 4) score += 35;
+  else if (name.length <= 6) score += 28;
+  else if (name.length <= 9) score += 20;
+  else if (name.length <= 12) score += 10;
+  else score -= 10;
+
+  const matchedTrending = TRENDING_KEYWORDS.filter((kw) => name.includes(kw));
+  score += Math.min(24, matchedTrending.length * 8);
+
+  const matchedCommercial = STRONG_COMMERCIAL_KEYWORDS.filter((kw) => name.includes(kw));
+  score += Math.min(16, matchedCommercial.length * 8);
+
+  if (PREFERRED_TLDS.includes(tld)) {
+    score += tld === 'com' ? 14 : 8;
+  } else {
+    score -= 12;
   }
-  
-  // Clean domain (no hyphens/numbers)
-  if (!name.includes('-') && !/\d/.test(name)) score += 10;
-  
+
+  if (!name.includes('-')) score += 5;
+  else score -= 14;
+
+  const digitCount = (name.match(/\d/g) || []).length;
+  if (digitCount === 0) score += 6;
+  else if (digitCount >= 2) score -= 10;
+
+  const vowelCount = (name.match(/[aeiou]/g) || []).length;
+  const vowelRatio = vowelCount / name.length;
+  if (vowelRatio < 0.2 || vowelRatio > 0.75) score -= 10;
+
+  const consonantClusters = name.match(/[bcdfghjklmnpqrstvwxyz]{4,}/g);
+  if (consonantClusters) score -= consonantClusters.length * 8;
+
+  if (/(.)\1\1/.test(name)) score -= 8;
+
   return Math.min(100, Math.max(0, score));
 }
 
@@ -202,7 +242,7 @@ async function upsertDomain(domainData) {
     const status = determineStatus(expiryDate);
     
     // Only store domains in pending_delete status (5-15 days until drop)
-    if (status !== 'pending_delete' || daysUntilDrop < 5 || daysUntilDrop > 15) {
+    if (status !== 'pending_delete' || daysUntilDrop < MIN_DAYS_UNTIL_DROP || daysUntilDrop > MAX_DAYS_UNTIL_DROP) {
       return { stored: false, reason: `Status: ${status}, Days: ${daysUntilDrop}` };
     }
     
@@ -333,14 +373,21 @@ async function main() {
   try {
     const domains = await fetchExpiringDomains();
     console.log(`📦 Received ${domains.length} domains\n`);
-    
+
+    const rankedDomains = domains
+      .map((domain) => ({
+        ...domain,
+        popularityScore: calculatePopularityScore(domain.domainName),
+      }))
+      .sort((a, b) => b.popularityScore - a.popularityScore);
+
     console.log('💾 Processing domains...\n');
     
     let stored = 0;
     let skipped = 0;
     let errors = 0;
     
-    for (const domain of domains) {
+    for (const domain of rankedDomains) {
       const result = await upsertDomain(domain);
       
       if (result.stored) {
