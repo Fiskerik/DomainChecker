@@ -96,17 +96,21 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Uppdaterad för att använda anrdoezrs.net för stabilare omdirigering
+ * Uppdaterad med fungerande struktur från jdoqocy.com
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
-  const advertiserId = process.env.NEXT_PUBLIC_GODADDY_ADVERTISER_ID || '1513033';
+  // PID (Ditt Publisher ID)
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
   
-  // Destinationen hos GoDaddy som utför sökningen
-  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos1`;
+  // Denna sifferkod (11432185) kommer från din fungerande länk och verkar vara 
+  // den specifika kampanj-länken som GoDaddy accepterar för deep linking.
+  const adId = '11432185';
+  
+  // Slutdestinationen med sökparametern
+  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos3`;
 
-  // Vi använder anrdoezrs.net som är standard för fungerande GoDaddy-länkar i CJ
-  return `https://www.anrdoezrs.net/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
+  // Konstruerar länken med den domän du föreslog (jdoqocy.com)
+  return `https://www.jdoqocy.com/click-${publisherId}-${adId}?url=${encodeURIComponent(destinationUrl)}`;
 }
 
 /**
