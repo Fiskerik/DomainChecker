@@ -77,14 +77,24 @@ async function fetchDropCatchDomains() {
     const csvData = zipEntries[0].getData().toString('utf8');
     const records = parse(csvData, { columns: true, skip_empty_lines: true });
 
-    const parsedDomains = records.map(row => {
-      // DropCatch CSV-kolumner kan heta olika saker, vi kollar de vanligaste:
-      const rawName = row.DomainName || row.name || row.Domain;
-      const rawDropDate = row.DropDate || row.drop_date;
+    if (records.length > 0) {
+      const sampleKeys = Object.keys(records[0]);
+      console.log(`🧪 CSV diagnostics: ${records.length} rows, columns: ${sampleKeys.join(', ')}`);
+    }
+
+    const parsedDomains = records.map((row, index) => {
+      // DropCatch CSV-kolumner kan heta olika saker.
+      const domainKey = Object.keys(row).find((key) => /domain|name/i.test(key));
+      const dropDateKey = Object.keys(row).find((key) => /drop/i.test(key) && /date|dt|time/i.test(key));
+
+      const rawName = row.DomainName || row.Domain || row.domain || row.name || (domainKey ? row[domainKey] : undefined);
+      const rawDropDate = row.DropDate || row.drop_date || row.DropDateUtc || row.dropDate || (dropDateKey ? row[dropDateKey] : undefined);
       const validDropDate = normalizeDate(rawDropDate);
 
       if (!validDropDate) {
-        console.log(`⚠️  Skipping ${rawName || 'unknown'} due to invalid drop date: ${rawDropDate}`);
+        if (index < 20) {
+          console.log(`⚠️  Skipping ${rawName || 'unknown'} due to invalid drop date: ${rawDropDate}`);
+        }
         return null;
       }
 
@@ -107,7 +117,7 @@ async function fetchDropCatchDomains() {
       }))
       .filter((domain) => domain.popularityScore >= MIN_POPULARITY_SCORE)
       .sort((a, b) => b.popularityScore - a.popularityScore)
-      .slice(0, 250)
+      .slice(0, MAX_DOMAINS_TO_STORE)
       .map(({ popularityScore, ...domain }) => domain);
 
     console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV`);
@@ -346,12 +356,13 @@ async function main() {
   
   try {
     const domains = await fetchDropCatchDomains();
-    console.log(`📦 Processing ${domains.length} domains...\n`);
+    const limitedDomains = domains.slice(0, MAX_DOMAINS_TO_STORE);
+    console.log(`📦 Processing ${limitedDomains.length} domains (hard cap: ${MAX_DOMAINS_TO_STORE})...\n`);
     
     let stored = 0;
     let skipped = 0;
     
-    for (const domain of domains) {
+    for (const domain of limitedDomains) {
     const isExpiring = await quickCheck(domain.domainName);
     if (!isExpiring) {
       skipped++;
