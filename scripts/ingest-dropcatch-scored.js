@@ -31,7 +31,7 @@ const NAMEBIO_API_KEY = process.env.NAMEBIO_API_KEY; // Optional
 
 const MIN_SCORE = 30; // Reject domains below this score
 const ENABLE_WHOIS_CHECK = true; // Set to false to skip WHOIS validation
-const MAX_DOMAINS_TO_PROCESS = parseInt(process.env.MAX_DOMAINS_TO_STORE || '300', 10);
+const MAX_DOMAINS_TO_PROCESS = parseInt(process.env.MAX_DOMAINS_TO_STORE || '500', 10);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -79,7 +79,7 @@ async function fetchDropCatchDomains() {
 
   const token = await getDropCatchToken();
 
-  const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut0?fileType=Csv', {
+  const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut1?fileType=Csv', {
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json, text/plain, */*',
