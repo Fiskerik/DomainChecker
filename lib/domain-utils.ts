@@ -83,7 +83,14 @@ export function getNamecheapAffiliateUrl(domainName: string): string {
  */
 export function getDropCatchAffiliateUrl(domainName: string): string {
   const affiliateId = process.env.NEXT_PUBLIC_DROPCATCH_AFF_ID || '';
-  return `https://www.dropcatch.com/domain/${encodeURIComponent(domainName)}${affiliateId ? `?aff=${affiliateId}` : ''}`;
+  
+  // DropCatch domain backorder page - CORRECT FORMAT
+  // Should be: https://www.dropcatch.com/domain/example.com
+  const baseUrl = `https://www.dropcatch.com/domain/${encodeURIComponent(domainName)}`;
+  
+  // Add affiliate ID if available
+  return affiliateId ? `${baseUrl}?aff=${affiliateId}` : baseUrl;
+}
 }
 
 /**
