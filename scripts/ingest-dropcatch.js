@@ -18,7 +18,7 @@
 
 // Endast för lokal utveckling!
 if (process.env.NODE_ENV !== 'production') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }
 require('dotenv').config();
 const axios = require('axios');
@@ -62,10 +62,14 @@ async function fetchDropCatchDomains() {
   try {
     const token = await getDropCatchToken();
 
-    const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/AllDays?fileType=Csv', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      responseType: 'arraybuffer'
-    });
+    const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut0?fileType=Csv', {
+  headers: { 
+    'Authorization': `Bearer ${token}`,
+    'Accept': 'application/json, text/plain, */*',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+  },
+  responseType: 'arraybuffer'
+});
 
     const zip = new AdmZip(response.data);
     const zipEntries = zip.getEntries();
