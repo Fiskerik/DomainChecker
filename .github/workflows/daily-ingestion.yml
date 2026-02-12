@@ -1,0 +1,66 @@
+name: Daily Domain Ingestion
+
+on:
+  schedule:
+    - cron: '0 21 * * *' # Körs kl 22:00 svensk tid varje kväll
+  workflow_dispatch:
+    inputs:
+      cleanup:
+        description: 'Run cleanup of old domains?'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  ingest-domains:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+        
+      
+      - name: Fetch and store domains
+        run: npx ts-node scripts/ingest-dropcatch.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DROPCATCH_CLIENT_ID: ${{ secrets.DROPCATCH_CLIENT_ID }}
+          DROPCATCH_CLIENT_SECRET: ${{ secrets.DROPCATCH_PASSWORD }}
+
+      - name: Cleanup old domains
+        if: ${{ github.event.inputs.cleanup == 'true' || github.event_name == 'schedule' }}
+        run: node scripts/cleanup.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  generate-report:
+    runs-on: ubuntu-latest
+    needs: ingest-domains
+    if: success()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Generate daily stats
+        run: node scripts/daily-report.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
