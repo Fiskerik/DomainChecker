@@ -78,24 +78,24 @@ async function fetchDropCatchDomains() {
       // DropCatch CSV-kolumner kan heta olika saker, vi kollar de vanligaste:
       const rawName = row.DomainName || row.name || row.Domain;
       const rawDropDate = row.DropDate || row.drop_date;
+      const validDropDate = normalizeDate(rawDropDate);
 
-      // Säkerställ att vi har ett giltigt datum för att undvika "Invalid time value"
-      let validDropDate = rawDropDate;
-      if (!rawDropDate || isNaN(new Date(rawDropDate).getTime())) {
-        // Om datum saknas eller är korrupt, sätt det till 10 dagar framåt som fallback
-        const fallback = new Date();
-        fallback.setDate(fallback.getDate() + 10);
-        validDropDate = fallback.toISOString().split('T')[0];
+      if (!validDropDate) {
+        console.log(`⚠️  Skipping ${rawName || 'unknown'} due to invalid drop date: ${rawDropDate}`);
+        return null;
       }
 
+      const normalizedDomainName = (rawName || '').trim().toLowerCase();
+      if (!normalizedDomainName) return null;
+
       return {
-        domainName: rawName,
+        domainName: normalizedDomainName,
         dropDate: validDropDate,
         expiryDate: calculateExpiryFromDrop(validDropDate),
         registrar: row.Registrar || 'Unknown'
       };
     })
-    .filter(d => d.domainName) // Ta bort eventuella tomma rader
+    .filter(Boolean)
     .slice(0, 100); // <--- LÄGG TILL DENNA RAD HÄR
 
     console.log(`✅ Successfully processed ${domains.length} domains from DropCatch CSV\n`);
@@ -115,6 +115,18 @@ function calculateExpiryFromDrop(dropDate) {
   const drop = new Date(dropDate);
   drop.setDate(drop.getDate() - 75);
   return drop.toISOString().split('T')[0];
+}
+
+/**
+ * Normalize and validate date input (YYYY-MM-DD output)
+ */
+function normalizeDate(rawDate) {
+  if (!rawDate) return null;
+
+  const parsed = new Date(rawDate);
+  if (isNaN(parsed.getTime())) return null;
+
+  return parsed.toISOString().split('T')[0];
 }
 
 /**
@@ -231,10 +243,15 @@ function generateMockDomains() {
 async function upsertDomain(domainData) {
   try {
     const { domainName, expiryDate, registrar } = domainData;
+
+    const normalizedExpiryDate = normalizeDate(expiryDate);
+    if (!normalizedExpiryDate) {
+      return { stored: false, reason: `Invalid expiry date: ${expiryDate}` };
+    }
     
-    const dropDate = domainData.dropDate || calculateDropDate(expiryDate);
+    const dropDate = normalizeDate(domainData.dropDate) || calculateDropDate(normalizedExpiryDate);
     const daysUntilDrop = calculateDaysUntilDrop(dropDate);
-    const status = determineStatus(expiryDate);
+    const status = determineStatus(normalizedExpiryDate);
     
     // Only store pending_delete domains (5-15 days window)
     if (status !== 'pending_delete' || daysUntilDrop < 5 || daysUntilDrop > 15) {
@@ -252,7 +269,7 @@ async function upsertDomain(domainData) {
       .upsert({
         domain_name: domainName,
         tld,
-        expiry_date: expiryDate,
+        expiry_date: normalizedExpiryDate,
         drop_date: dropDate,
         days_until_drop: daysUntilDrop,
         status,
@@ -279,17 +296,31 @@ async function upsertDomain(domainData) {
 }
 async function quickCheck(domainName) {
   try {
-    const response = await fetch(`https://dns.google/resolve?name=${domainName}&type=A`);
-    const data = await response.json();
-    
-    // If DNS exists, domain is registered
-    if (data.Answer && data.Answer.length > 0) {
-      return false; // Skip - still registered
+    const [aResponse, nsResponse, soaResponse] = await Promise.all([
+      fetch(`https://dns.google/resolve?name=${domainName}&type=A`),
+      fetch(`https://dns.google/resolve?name=${domainName}&type=NS`),
+      fetch(`https://dns.google/resolve?name=${domainName}&type=SOA`),
+    ]);
+
+    const [aData, nsData, soaData] = await Promise.all([
+      aResponse.json(),
+      nsResponse.json(),
+      soaResponse.json(),
+    ]);
+
+    // If DNS resolves (A/NS/SOA or Status=0), the domain is almost certainly taken.
+    const hasRecords = [aData, nsData, soaData].some(data => Array.isArray(data.Answer) && data.Answer.length > 0);
+    const hasNoError = [aData, nsData, soaData].some(data => data.Status === 0);
+
+    if (hasRecords || hasNoError) {
+      console.log(`   WHOIS filter: skip taken domain ${domainName}`);
+      return false;
     }
-    
-    return true; // OK to add
+
+    return true;
   } catch (error) {
-    return true; // On error, include it
+    console.log(`   WHOIS filter warning (${domainName}): ${error.message}`);
+    return true;
   }
 }
 /**
@@ -321,6 +352,11 @@ async function main() {
         console.log(`   ✅ ${d.domain_name.padEnd(30)} | ${d.days_until_drop}d | ${d.popularity_score}/100`);
       } else {
         skipped++;
+        if (result.reason) {
+          console.log(`   ℹ️  Skip ${domain.domainName}: ${result.reason}`);
+        } else if (result.error) {
+          console.log(`   ⚠️  Error ${domain.domainName}: ${result.error}`);
+        }
       }
     }
     
