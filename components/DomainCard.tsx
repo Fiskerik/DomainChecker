@@ -7,7 +7,8 @@ import {
   getEstimatedValue, 
   getDomainRoot,
   getNamecheapAffiliateUrl,
-  getDropCatchAffiliateUrl 
+  getGoDaddyAffiliateUrl,
+  getDynaDotAffiliateUrl
 } from '@/lib/domain-utils';
 
 interface Domain {
@@ -32,13 +33,14 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
 
-  const handleAffiliateClick = async (type: 'namecheap' | 'dropcatch', e: React.MouseEvent) => {
+  const handleAffiliateClick = async (type: 'namecheap' | 'godaddy' | 'dynadot', e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
     setIsTracking(true);
     try {
       await fetch('/api/track/click', {
+        // - Notering: Denna endpoint bör finnas i din backend för att logga klick
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -54,7 +56,8 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
 
     const affiliateUrls = {
       namecheap: getNamecheapAffiliateUrl(domain.domain_name),
-      dropcatch: getDropCatchAffiliateUrl(domain.domain_name),
+      godaddy: getGoDaddyAffiliateUrl(domain.domain_name),
+      dynadot: getDynaDotAffiliateUrl(domain.domain_name),
     };
 
     window.open(affiliateUrls[type], '_blank');
@@ -70,9 +73,7 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
   if (viewMode === 'list') {
     return (
       <div className="bg-white border border-gray-200 hover:border-blue-400 rounded-lg transition-all">
-        {/* Compact Row */}
         <div className="flex items-center gap-3 p-3 sm:p-4">
-          {/* Domain Name */}
           <Link 
             href={`/domain/${domainSlug}`}
             className="flex-1 min-w-0"
@@ -82,7 +83,6 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
             </h3>
           </Link>
 
-          {/* Stats - Hidden on mobile */}
           <div className="hidden sm:flex items-center gap-4 text-xs text-gray-600">
             <span className={`font-medium ${urgencyColor} w-8 text-right`}>
               {domain.days_until_drop}d
@@ -92,7 +92,6 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
             <span className="font-semibold text-green-600 w-24 text-right">{getEstimatedValue(domain)}</span>
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setExpanded(!expanded)}
@@ -103,46 +102,29 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
           </div>
         </div>
 
-        {/* Mobile Stats - Only on small screens */}
-        <div className="flex sm:hidden items-center gap-3 px-3 pb-2 text-xs">
-          <span className={`font-medium ${urgencyColor}`}>{domain.days_until_drop}d</span>
-          <span>•</span>
-          <span className="font-semibold">{domain.popularity_score}/100</span>
-          <span>•</span>
-          <span className="font-semibold text-green-600">{getEstimatedValue(domain)}</span>
-        </div>
-
-        {/* Expanded Details */}
         {expanded && (
           <div className="border-t border-gray-100 p-3 sm:p-4 space-y-3 bg-gray-50">
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                .{domain.tld}
-              </span>
-              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded capitalize">
-                {domain.category}
-              </span>
-              {domain.popularity_score >= 70 && (
-                <span className="bg-red-100 text-red-700 px-2 py-1 rounded">
-                  🔥 Hot
-                </span>
-              )}
-            </div>
-
             <div className="flex flex-col sm:flex-row gap-2">
               <button
-                onClick={(e) => handleAffiliateClick('dropcatch', e)}
+                onClick={(e) => handleAffiliateClick('godaddy', e)}
                 disabled={isTracking}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
               >
-                Backorder $59
+                GoDaddy $24.99
+              </button>
+              <button
+                onClick={(e) => handleAffiliateClick('dynadot', e)}
+                disabled={isTracking}
+                className="flex-1 bg-gray-800 hover:bg-black text-white text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
+              >
+                DynaDot $9.99
               </button>
               <button
                 onClick={(e) => handleAffiliateClick('namecheap', e)}
                 disabled={isTracking}
                 className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
               >
-                Check Availability
+                Namecheap
               </button>
               <Link
                 href={`/domain/${domainSlug}`}
@@ -157,10 +139,8 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
     );
   }
 
-  // Card View
   return (
     <div className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-lg transition-all overflow-hidden">
-      {/* Compact Header */}
       <div className="p-3 sm:p-4">
         <Link href={`/domain/${domainSlug}`}>
           <h3 className="font-semibold text-sm sm:text-base text-gray-900 hover:text-blue-600 mb-2 break-all">
@@ -178,13 +158,11 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
           </span>
         </div>
 
-        {/* Price - Always Visible */}
         <div className="mb-3 text-xs">
           <span className="text-gray-600">Est: </span>
           <span className="font-semibold text-green-600">{getEstimatedValue(domain)}</span>
         </div>
 
-        {/* Popularity Bar - Compact */}
         <div className="mb-3">
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-gray-600">Score</span>
@@ -198,7 +176,6 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
           </div>
         </div>
 
-        {/* Expand Button */}
         <button
           onClick={() => setExpanded(!expanded)}
           className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center gap-1 py-1"
@@ -211,22 +188,28 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
         </button>
       </div>
 
-      {/* Expanded Section */}
       {expanded && (
         <div className="border-t border-gray-100 p-3 sm:p-4 space-y-2 bg-gray-50">
           <button
-            onClick={(e) => handleAffiliateClick('dropcatch', e)}
+            onClick={(e) => handleAffiliateClick('godaddy', e)}
             disabled={isTracking}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
           >
-            Backorder $59
+            GoDaddy $24.99
+          </button>
+          <button
+            onClick={(e) => handleAffiliateClick('dynadot', e)}
+            disabled={isTracking}
+            className="w-full bg-gray-800 hover:bg-black text-white text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
+          >
+            DynaDot $9.99
           </button>
           <button
             onClick={(e) => handleAffiliateClick('namecheap', e)}
             disabled={isTracking}
             className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
           >
-            Check Availability
+            Namecheap
           </button>
           <Link
             href={`/domain/${domainSlug}`}
