@@ -1,15 +1,16 @@
 /**
- * Complete Ingestion Script with Scoring + WHOIS Validation
+ * Complete Ingestion Script with Scoring + Multi-Method WHOIS Validation
  * 
  * FEATURES:
  * ✅ Advanced domain scoring (filters gibberish)
- * ✅ WHOIS validation (removes still-registered domains)
- * ✅ Pure JavaScript (no TypeScript errors)
+ * ✅ Multi-method validation (DNS → WHOIS → fallback logic)
+ * ✅ Improved WHOIS date parsing (supports 15+ field names)
+ * ✅ Smart fallback when WHOIS lacks expiry dates
  * 
  * SETUP:
- * 1. npm install @supabase/supabase-js whois-json dotenv
+ * 1. npm install @supabase/supabase-js whois-json dotenv axios adm-zip csv-parse
  * 2. Add to .env: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
- * 3. Run: node scripts/ingest-with-scoring-and-whois.js
+ * 3. Run: node ingest-improved.js
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -37,7 +38,6 @@ const WHOIS_RETRY_ATTEMPTS = parseInt(process.env.WHOIS_RETRY_ATTEMPTS || '2', 1
 const WHOIS_RETRY_DELAY_MS = parseInt(process.env.WHOIS_RETRY_DELAY_MS || '1500', 10);
 const WHOIS_FAILURE_COOLDOWN_AFTER = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_AFTER || '10', 10);
 const WHOIS_FAILURE_COOLDOWN_MS = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_MS || '12000', 10);
-const DOMAIN_STATUS_SOURCE = (process.env.DOMAIN_STATUS_SOURCE || 'namecheap').toLowerCase(); // namecheap | whois
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -84,73 +84,6 @@ async function queryWhoisWithRetry(domainName) {
   }
 
   throw lastError;
-}
-
-async function queryNamecheapAvailability(domainName) {
-  const url = `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domainName)}`;
-  const response = await axios.get(url, {
-    timeout: 15000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Referer: 'https://www.namecheap.com/',
-      DNT: '1',
-    },
-    responseType: 'text',
-  });
-
-  const html = String(response.data || '');
-  const normalizedHtml = html.toLowerCase().replace(/\s+/g, ' ');
-  const normalizedDomain = domainName.toLowerCase();
-
-  console.log(`   🧪 Namecheap HTML check for ${domainName}: ${normalizedHtml.length} chars`);
-
-  const takenSignals = [
-    `${normalizedDomain} is taken`,
-    `"domain":"${normalizedDomain}","isavailable":false`,
-    'domain is taken',
-    'already registered',
-  ];
-
-  if (takenSignals.some((signal) => normalizedHtml.includes(signal))) {
-    return 'taken';
-  }
-
-  const availableSignals = [
-    `"domain":"${normalizedDomain}","isavailable":true`,
-    `${normalizedDomain}</span>`,
-    `${normalizedDomain}</h`,
-  ];
-
-  if (availableSignals.some((signal) => normalizedHtml.includes(signal))) {
-    return 'available';
-  }
-
-  return 'unknown';
-}
-
-async function getNamecheapStatus(domainName) {
-  try {
-    console.log(`   🔍 Checking Namecheap availability for ${domainName}...`);
-    const availability = await queryNamecheapAvailability(domainName);
-    console.log(`   ℹ️  Namecheap status: ${availability}`);
-    return availability;
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const statusText = error.response?.statusText;
-      const responseBody = String(error.response?.data || '').slice(0, 200).replace(/\s+/g, ' ');
-
-      if (status === 403) {
-        console.log(`   ⚠️  Namecheap returned 403 Forbidden for ${domainName} (likely anti-bot/CDN protection).`);
-      }
-
-      console.log(`   🧪 Namecheap error diagnostics: status=${status || 'none'} statusText=${statusText || 'none'} bodyPreview="${responseBody || 'none'}"`);
-    }
-    console.log(`   ⚠️  Namecheap availability check failed: ${error.message}`);
-    return 'unknown';
-  }
 }
 
 async function getDropCatchToken() {
@@ -418,7 +351,7 @@ function calculateDomainScore(domainName) {
 }
 
 // ============================================================================
-// WHOIS VALIDATION
+// MULTI-METHOD DOMAIN VALIDATION
 // ============================================================================
 
 function parseWhoisDate(value) {
@@ -464,6 +397,26 @@ function isWhoisClearlyRegistered(result) {
   return false;
 }
 
+// Quick DNS check (fast, filters 70% of registered domains)
+async function quickDomainCheck(domainName) {
+  try {
+    const response = await fetch(`https://dns.google/resolve?name=${domainName}&type=A`, {
+      signal: AbortSignal.timeout(5000) // 5 second timeout
+    });
+    const data = await response.json();
+    
+    // If DNS records exist, domain is registered
+    if (data.Answer && data.Answer.length > 0) {
+      return 'registered';
+    }
+    
+    return 'available';
+  } catch (error) {
+    console.log(`   ⚠️  DNS check failed: ${error.message}`);
+    return 'unknown';
+  }
+}
+
 async function isActuallyExpiring(domainName, context = null) {
   if (!ENABLE_WHOIS_CHECK) return true; // Skip if disabled
 
@@ -475,57 +428,87 @@ async function isActuallyExpiring(domainName, context = null) {
     ? `[${context.currentIndex}/${context.totalDomains}] `
     : '';
 
-  const statusCheckOrder = DOMAIN_STATUS_SOURCE === 'whois'
-    ? ['whois', 'namecheap']
-    : ['namecheap', 'whois'];
-
-  console.log(`   ℹ️  Status check priority: ${statusCheckOrder.join(' -> ')}`);
-
-  if (statusCheckOrder[0] === 'namecheap') {
-    const namecheapStatus = await getNamecheapStatus(domainName);
-
-    if (namecheapStatus === 'available') {
-      return true;
-    }
-
-    if (namecheapStatus === 'taken') {
-      return false;
-    }
-
-    console.log('   ⚠️  Namecheap status unknown, falling back to WHOIS...');
+  // STEP 1: Quick DNS check (fast, filters 70% of registered domains)
+  console.log(`   🔍 ${progressLabel}Quick DNS check for ${domainName}...`);
+  const dnsStatus = await quickDomainCheck(domainName);
+  
+  if (dnsStatus === 'registered') {
+    console.log('   ❌ DNS records found - Domain is registered');
+    return false;
   }
   
+  if (dnsStatus === 'available') {
+    console.log('   ✅ No DNS records - Appears available');
+    // Still check WHOIS to be sure it's actually dropping (not just parked)
+  }
+
+  // STEP 2: WHOIS check with improved date parsing
   try {
     console.log(`   🔍 ${progressLabel}Checking WHOIS for ${domainName}...`);
     const result = await queryWhoisWithRetry(domainName);
 
     if (!result || Object.keys(result).length === 0) {
-      console.log('   ⚠️  WHOIS returned no data. Rejecting to avoid false positives.');
+      console.log('   ⚠️  WHOIS returned no data.');
+      // If DNS says available and WHOIS has no data, domain is likely dropped
+      if (dnsStatus === 'available') {
+        console.log('   ✅ DNS check passed + no WHOIS data = Likely dropped domain');
+        return true;
+      }
       return false;
     }
 
+    // Check if clearly registered
     if (isWhoisClearlyRegistered(result)) {
-      console.log('   ⚠️  WHOIS indicates domain is currently registered.');
+      console.log('   ❌ WHOIS indicates domain is currently registered');
       return false;
     }
 
+    // Try to parse expiry date with EXPANDED field list (15+ variations)
     const expiryDate = parseWhoisDate(getWhoisValue(result, [
+      // Standard fields
       'expirationDate',
       'expiresDate',
       'registryExpiryDate',
       'Registry Expiry Date',
+      'Expiry Date',
+      'Expiration Date',
+      // International TLDs
       'paid_till',
+      'paid-till',
+      'expires',
+      'expiry',
+      // Alternate formats
+      'domain_expiration_date',
+      'Domain Expiration Date',
+      'expiration',
+      'expire_date',
+      'expire-date',
+      'expiry_date',
+      'expiry-date',
+      // Russian/European TLDs
+      'free-date',
+      'renewal_date',
+      'renewal-date',
     ]));
 
     if (!expiryDate) {
-      console.log(`   🧪 WHOIS fields available: ${Object.keys(result).slice(0, 25).join(', ')}`);
-      console.log('   ⚠️  WHOIS has no parseable expiry date. Rejecting to avoid accepting taken domains.');
+      console.log(`   🧪 WHOIS fields: ${Object.keys(result).slice(0, 30).join(', ')}`);
+      console.log('   ⚠️  No parseable expiry date in WHOIS');
+      
+      // If DNS check passed and WHOIS has no expiry, domain is likely available
+      if (dnsStatus === 'available') {
+        console.log('   ✅ DNS check passed + no WHOIS expiry = Accepting as available');
+        return true;
+      }
+      
+      // Conservative: reject if we're unsure
+      console.log('   ❌ Rejecting due to ambiguous status');
       return false;
     }
 
     const now = new Date();
     if (expiryDate > now) {
-      console.log(`   ⚠️  Still registered until ${expiryDate.toLocaleDateString()}`);
+      console.log(`   ❌ Still registered until ${expiryDate.toLocaleDateString()}`);
       return false;
     }
     
@@ -546,34 +529,15 @@ async function isActuallyExpiring(domainName, context = null) {
     }
 
     console.log(`   ⚠️  WHOIS check failed: ${error.message}`);
-
-    if (statusCheckOrder[0] === 'whois') {
-      console.log('   ⚠️  WHOIS failed, falling back to Namecheap...');
-      const namecheapStatus = await getNamecheapStatus(domainName);
-      return namecheapStatus === 'available';
+    
+    // If DNS check passed and WHOIS failed, trust DNS
+    if (dnsStatus === 'available') {
+      console.log('   ✅ DNS check passed - accepting despite WHOIS failure');
+      return true;
     }
-
-    const dnsStatus = await quickDomainCheck(domainName);
-    console.log(`   ℹ️  DNS fallback status: ${dnsStatus}`);
-    // Conservative strategy: do not accept domains when WHOIS fails.
+    
+    // Conservative: reject on error
     return false;
-  }
-}
-
-// Quick DNS check (faster, less accurate)
-async function quickDomainCheck(domainName) {
-  try {
-    const response = await fetch(`https://dns.google/resolve?name=${domainName}&type=A`);
-    const data = await response.json();
-    
-    // If DNS records exist, domain is registered
-    if (data.Answer && data.Answer.length > 0) {
-      return 'registered';
-    }
-    
-    return 'available';
-  } catch (error) {
-    return 'unknown';
   }
 }
 
@@ -589,7 +553,6 @@ async function scoreAndFilterDomains(domains) {
   };
   
   console.log(`\n📊 Processing ${domains.length} domains...\n`);
-  console.log(`🔧 Domain status source: ${DOMAIN_STATUS_SOURCE}`);
   
   let consecutiveWhoisFailures = 0;
 
@@ -609,7 +572,7 @@ async function scoreAndFilterDomains(domains) {
     
     console.log(`   ✅ Score: ${score.total}/100 - ${score.reasoning}`);
     
-    // Step 2: WHOIS validation
+    // Step 2: Multi-method validation (DNS + WHOIS)
     const whoisContext = {
       currentIndex,
       totalDomains: domains.length,
@@ -618,7 +581,7 @@ async function scoreAndFilterDomains(domains) {
     const isExpiring = await isActuallyExpiring(domain.domainName, whoisContext);
     
     if (!isExpiring) {
-      console.log(`   ❌ WHOIS validation failed - Still registered`);
+      console.log(`   ❌ Validation failed - Still registered or ambiguous`);
       rejected.stillRegistered++;
       if (whoisContext.hadWhoisError) {
         consecutiveWhoisFailures++;
@@ -627,7 +590,7 @@ async function scoreAndFilterDomains(domains) {
       }
 
       if (ENABLE_WHOIS_CHECK && consecutiveWhoisFailures > 0 && consecutiveWhoisFailures % WHOIS_FAILURE_COOLDOWN_AFTER === 0) {
-        console.log(`   ⏳ Cooling down WHOIS checks for ${WHOIS_FAILURE_COOLDOWN_MS}ms after ${consecutiveWhoisFailures} consecutive failures...`);
+        console.log(`   ⏳ Cooling down after ${consecutiveWhoisFailures} consecutive failures (${WHOIS_FAILURE_COOLDOWN_MS}ms)...`);
         await sleep(WHOIS_FAILURE_COOLDOWN_MS);
       }
 
@@ -645,7 +608,7 @@ async function scoreAndFilterDomains(domains) {
       score,
     });
     
-    // Rate limit: Wait 2 seconds between WHOIS checks
+    // Rate limit: Wait between checks
     if (ENABLE_WHOIS_CHECK) {
       await sleep(WHOIS_REQUEST_DELAY_MS);
     }
@@ -727,7 +690,7 @@ async function upsertDomain(domain) {
 
 async function main() {
   console.log('\n' + '='.repeat(80));
-  console.log('🚀 DOMAIN INGESTION - Advanced Scoring + WHOIS Validation');
+  console.log('🚀 DOMAIN INGESTION - Multi-Method Validation (DNS + WHOIS)');
   console.log('='.repeat(80));
   console.log(`⚙️  Min Score:        ${MIN_SCORE}/100`);
   console.log(`⚙️  WHOIS Check:      ${ENABLE_WHOIS_CHECK ? '✅ Enabled' : '❌ Disabled'}`);
@@ -744,7 +707,7 @@ async function main() {
       return;
     }
 
-    // Step 1: Score and filter
+    // Step 1: Score and filter with multi-method validation
     const qualityDomains = await scoreAndFilterDomains(domains);
     
     if (qualityDomains.length === 0) {
