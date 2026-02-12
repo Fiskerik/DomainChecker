@@ -50,33 +50,7 @@ export function FilterBar({
 
       {/* Filters */}
       <div className="p-3 sm:p-4 space-y-3">
-        {/* View Mode Toggle - Desktop */}
-        <div className="hidden sm:flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onViewModeChange('card')}
-              className={`p-2 rounded ${
-                viewMode === 'card'
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-              title="Card view"
-            >
-              <LayoutGrid size={18} />
-            </button>
-            <button
-              onClick={() => onViewModeChange('list')}
-              className={`p-2 rounded ${
-                viewMode === 'list'
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-              title="List view"
-            >
-              <List size={18} />
-            </button>
-          </div>
-
+        <div className="flex justify-end">
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -128,14 +102,15 @@ export function FilterBar({
         </div>
 
         {/* Sort Options */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+          <div className="sm:col-span-5">
             <label className="text-xs font-semibold text-gray-700 mb-2 block">Sort By</label>
             <select
-              value={filters.sort || 'popularity_score'}
+              value={filters.sort || 'days_until_drop'}
               onChange={(e) => onFilterChange({ ...filters, sort: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
+              <option value="days_until_drop">Time Left to Expiry</option>
               <option value="popularity_score">Popularity</option>
               <option value="drop_date">Drop Date</option>
               <option value="created_at">Recently Added</option>
@@ -143,16 +118,44 @@ export function FilterBar({
             </select>
           </div>
 
-          <div className="flex-1">
+          <div className="sm:col-span-5">
             <label className="text-xs font-semibold text-gray-700 mb-2 block">Order</label>
             <select
-              value={filters.order || 'desc'}
+              value={filters.order || 'asc'}
               onChange={(e) => onFilterChange({ ...filters, order: e.target.value })}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
-              <option value="desc">High to Low</option>
-              <option value="asc">Low to High</option>
+              <option value="asc">Ascending ↑</option>
+              <option value="desc">Descending ↓</option>
             </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-semibold text-gray-700 mb-2 block">View</label>
+            <div className="flex items-center gap-2 h-10">
+              <button
+                onClick={() => onViewModeChange('card')}
+                className={`p-2 rounded ${
+                  viewMode === 'card'
+                    ? 'bg-blue-100 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Card view"
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => onViewModeChange('list')}
+                className={`p-2 rounded ${
+                  viewMode === 'list'
+                    ? 'bg-blue-100 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="List view"
+              >
+                <List size={18} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -211,32 +214,6 @@ export function FilterBar({
           </div>
         )}
 
-        {/* Mobile View Toggle */}
-        <div className="flex sm:hidden items-center justify-between pt-2 border-t border-gray-100">
-          <span className="text-xs font-semibold text-gray-700">View</span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onViewModeChange('card')}
-              className={`px-3 py-1.5 text-xs rounded ${
-                viewMode === 'card'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              Cards
-            </button>
-            <button
-              onClick={() => onViewModeChange('list')}
-              className={`px-3 py-1.5 text-xs rounded ${
-                viewMode === 'list'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              List
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
