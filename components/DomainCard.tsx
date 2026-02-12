@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { 
   getEstimatedValue, 
   getDomainRoot,
@@ -84,11 +84,12 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
 
           {/* Stats - Hidden on mobile */}
           <div className="hidden sm:flex items-center gap-4 text-xs text-gray-600">
-            <span className={`font-medium ${urgencyColor}`}>
+            <span className={`font-medium ${urgencyColor} w-8 text-right`}>
               {domain.days_until_drop}d
             </span>
-            <span className="font-semibold">{domain.popularity_score}</span>
-            <span className="capitalize text-gray-500">{domain.category}</span>
+            <span className="font-semibold w-8 text-right">{domain.popularity_score}</span>
+            <span className="capitalize text-gray-500 w-20">{domain.category}</span>
+            <span className="font-semibold text-green-600 w-24 text-right">{getEstimatedValue(domain)}</span>
           </div>
 
           {/* Actions */}
@@ -108,18 +109,18 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
           <span>•</span>
           <span className="font-semibold">{domain.popularity_score}/100</span>
           <span>•</span>
-          <span className="capitalize text-gray-500">{domain.category}</span>
+          <span className="font-semibold text-green-600">{getEstimatedValue(domain)}</span>
         </div>
 
         {/* Expanded Details */}
         {expanded && (
           <div className="border-t border-gray-100 p-3 sm:p-4 space-y-3 bg-gray-50">
             <div className="flex flex-wrap gap-2 text-xs">
-              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                Est. {getEstimatedValue(domain)}
-              </span>
               <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded">
                 .{domain.tld}
+              </span>
+              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded capitalize">
+                {domain.category}
               </span>
               {domain.popularity_score >= 70 && (
                 <span className="bg-red-100 text-red-700 px-2 py-1 rounded">
@@ -167,7 +168,7 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
           </h3>
         </Link>
 
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex gap-2 text-xs">
             <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded">.{domain.tld}</span>
             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded capitalize">{domain.category}</span>
@@ -175,6 +176,12 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
           <span className={`text-xs font-semibold ${urgencyColor}`}>
             {domain.days_until_drop}d
           </span>
+        </div>
+
+        {/* Price - Always Visible */}
+        <div className="mb-3 text-xs">
+          <span className="text-gray-600">Est: </span>
+          <span className="font-semibold text-green-600">{getEstimatedValue(domain)}</span>
         </div>
 
         {/* Popularity Bar - Compact */}
@@ -206,36 +213,31 @@ export function DomainCard({ domain, viewMode }: DomainCardProps) {
 
       {/* Expanded Section */}
       {expanded && (
-        <div className="border-t border-gray-100 p-3 sm:p-4 space-y-3 bg-gray-50">
-          <div className="text-xs">
-            <span className="text-gray-600">Est. Value: </span>
-            <span className="font-semibold text-green-600">{getEstimatedValue(domain)}</span>
-          </div>
-
-          <div className="space-y-2">
-            <button
-              onClick={(e) => handleAffiliateClick('dropcatch', e)}
-              disabled={isTracking}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
-            >
-              Backorder $59
-            </button>
-            <button
-              onClick={(e) => handleAffiliateClick('namecheap', e)}
-              disabled={isTracking}
-              className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
-            >
-              Check Availability
-            </button>
-            <Link
-              href={`/domain/${domainSlug}`}
-              className="block w-full border border-blue-500 text-blue-600 hover:bg-blue-50 text-sm font-medium py-2 px-3 rounded transition-colors text-center"
-            >
-              View Details
-            </Link>
-          </div>
+        <div className="border-t border-gray-100 p-3 sm:p-4 space-y-2 bg-gray-50">
+          <button
+            onClick={(e) => handleAffiliateClick('dropcatch', e)}
+            disabled={isTracking}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
+          >
+            Backorder $59
+          </button>
+          <button
+            onClick={(e) => handleAffiliateClick('namecheap', e)}
+            disabled={isTracking}
+            className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-3 rounded transition-colors disabled:opacity-50"
+          >
+            Check Availability
+          </button>
+          <Link
+            href={`/domain/${domainSlug}`}
+            className="block w-full border border-blue-500 text-blue-600 hover:bg-blue-50 text-sm font-medium py-2 px-3 rounded transition-colors text-center"
+          >
+            View Details
+          </Link>
         </div>
       )}
     </div>
   );
 }
+
+export default DomainCard;
