@@ -15,6 +15,9 @@
 import { createClient } from '@supabase/supabase-js';
 import whois from 'whois-json';
 import dotenv from 'dotenv';
+import axios from 'axios';
+import AdmZip from 'adm-zip';
+import { parse } from 'csv-parse/sync';
 
 dotenv.config();
 
@@ -28,8 +31,108 @@ const NAMEBIO_API_KEY = process.env.NAMEBIO_API_KEY; // Optional
 
 const MIN_SCORE = 30; // Reject domains below this score
 const ENABLE_WHOIS_CHECK = true; // Set to false to skip WHOIS validation
+const MAX_DOMAINS_TO_PROCESS = parseInt(process.env.MAX_DOMAINS_TO_STORE || '300', 10);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
+async function getDropCatchToken() {
+  const clientId = process.env.DROPCATCH_CLIENT_ID;
+  const clientSecret = process.env.DROPCATCH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Missing DROPCATCH_CLIENT_ID or DROPCATCH_CLIENT_SECRET');
+  }
+
+  const response = await axios.post('https://api.dropcatch.com/authorize', {
+    clientId,
+    clientSecret,
+  });
+
+  if (!response.data?.token) {
+    throw new Error('DropCatch authorize response did not contain token');
+  }
+
+  return response.data.token;
+}
+
+function normalizeDate(rawDate) {
+  if (!rawDate) return null;
+
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed.toISOString().split('T')[0];
+}
+
+function calculateExpiryFromDrop(dropDate) {
+  const drop = new Date(dropDate);
+  drop.setDate(drop.getDate() - 75);
+  return drop.toISOString().split('T')[0];
+}
+
+async function fetchDropCatchDomains() {
+  console.log('🔍 Fetching dropping domains file from DropCatch...\n');
+
+  const token = await getDropCatchToken();
+
+  const response = await axios.get('https://api.dropcatch.com/v2/downloads/dropping/DaysOut0?fileType=Csv', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json, text/plain, */*',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    },
+    responseType: 'arraybuffer',
+  });
+
+  const zip = new AdmZip(response.data);
+  const zipEntries = zip.getEntries();
+  if (zipEntries.length === 0) throw new Error('Zip file is empty');
+
+  const csvData = zipEntries[0].getData().toString('utf8');
+  const records = parse(csvData, { columns: true, skip_empty_lines: true });
+
+  if (records.length > 0) {
+    const sampleKeys = Object.keys(records[0]);
+    console.log(`🧪 CSV diagnostics: ${records.length} rows, columns: ${sampleKeys.join(', ')}`);
+  }
+
+  const parsedDomains = records
+    .map((row, index) => {
+      const domainKey = Object.keys(row).find((key) => /domain|name/i.test(key));
+      const dropDateKey = Object.keys(row).find((key) => /drop/i.test(key) && /date|dt|time/i.test(key));
+
+      const rawName = row.DomainName || row.Domain || row.domain || row.name || (domainKey ? row[domainKey] : undefined);
+      const rawDropDate = row.DropDate || row.drop_date || row.DropDateUtc || row.dropDate || (dropDateKey ? row[dropDateKey] : undefined);
+      const validDropDate = normalizeDate(rawDropDate);
+
+      if (!validDropDate) {
+        if (index < 20) {
+          console.log(`⚠️  Skipping ${rawName || 'unknown'} due to invalid drop date: ${rawDropDate}`);
+        }
+        return null;
+      }
+
+      const normalizedDomainName = (rawName || '').trim().toLowerCase();
+      if (!normalizedDomainName) return null;
+
+      return {
+        domainName: normalizedDomainName,
+        dropDate: validDropDate,
+        expiryDate: calculateExpiryFromDrop(validDropDate),
+        registrar: row.Registrar || 'Unknown',
+      };
+    })
+    .filter(Boolean)
+    .slice(0, MAX_DOMAINS_TO_PROCESS);
+
+  console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV\n`);
+
+  return parsedDomains;
+}
 
 // ============================================================================
 // TRENDING KEYWORDS (2025)
@@ -375,21 +478,6 @@ async function upsertDomain(domain) {
 }
 
 // ============================================================================
-// MOCK DATA (REPLACE WITH REAL SCRAPER)
-// ============================================================================
-
-const MOCK_DOMAINS = [
-  { domainName: 'aiagent.io', expiryDate: '2025-02-20', registrar: 'GoDaddy' },
-  { domainName: 'quantumlabs.ai', expiryDate: '2025-02-22', registrar: 'Namecheap' },
-  { domainName: 'baisxs.com', expiryDate: '2025-02-19', registrar: 'Unknown' },
-  { domainName: 'climatetech.co', expiryDate: '2025-02-25', registrar: 'Google' },
-  { domainName: 'xyz123shop.com', expiryDate: '2025-02-18', registrar: 'Dynadot' },
-  { domainName: 'biohack.io', expiryDate: '2025-02-21', registrar: 'GoDaddy' },
-  { domainName: 'getpro.app', expiryDate: '2025-02-23', registrar: 'Namecheap' },
-  { domainName: 'xqzrt.net', expiryDate: '2025-02-24', registrar: 'Unknown' },
-];
-
-// ============================================================================
 // MAIN FUNCTION
 // ============================================================================
 
@@ -403,8 +491,15 @@ async function main() {
   console.log('='.repeat(80) + '\n');
   
   try {
+    const domains = await fetchDropCatchDomains();
+
+    if (domains.length === 0) {
+      console.log('⚠️  No domains fetched from DropCatch.');
+      return;
+    }
+
     // Step 1: Score and filter
-    const qualityDomains = await scoreAndFilterDomains(MOCK_DOMAINS);
+    const qualityDomains = await scoreAndFilterDomains(domains);
     
     if (qualityDomains.length === 0) {
       console.log('⚠️  No domains passed validation!');
