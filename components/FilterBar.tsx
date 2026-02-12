@@ -77,6 +77,38 @@ export function FilterBar({
           </button>
         </div>
 
+        {/* Status Filter */}
+        <div>
+          <label className="text-xs font-semibold text-gray-700 mb-2 block">Status</label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'exclude_pending_delete', label: 'All (No Pending Delete)' },
+              { value: 'all', label: 'All Statuses' },
+              { value: 'grace', label: 'Grace' },
+              { value: 'redemption', label: 'Redemption' },
+              { value: 'dropped', label: 'Dropped' },
+              { value: 'pending_delete', label: 'Pending Delete' },
+            ].map((statusOption) => (
+              <button
+                key={statusOption.value}
+                onClick={() =>
+                  onFilterChange({
+                    ...filters,
+                    status_mode: statusOption.value,
+                  })
+                }
+                className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg font-medium transition-colors ${
+                  (filters.status_mode || 'exclude_pending_delete') === statusOption.value
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {statusOption.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* TLD Filter */}
         <div>
           <label className="text-xs font-semibold text-gray-700 mb-2 block">TLD</label>
@@ -213,7 +245,7 @@ export function FilterBar({
         </div>
 
         {/* Active Filters */}
-        {(filters.tld || filters.category || filters.search || filters.min_score !== undefined || filters.max_score !== undefined) && (
+        {(filters.status_mode || filters.tld || filters.category || filters.search || filters.min_score !== undefined || filters.max_score !== undefined) && (
           <div className="pt-2 border-t border-gray-100">
             <div className="flex items-center justify-between">
               <div className="flex flex-wrap gap-2">
@@ -223,6 +255,17 @@ export function FilterBar({
                     <button
                       onClick={() => onFilterChange({ ...filters, tld: undefined })}
                       className="ml-1.5 hover:text-blue-900"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                {filters.status_mode && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                    Status: {filters.status_mode === 'exclude_pending_delete' ? 'No Pending Delete' : filters.status_mode.replace('_', ' ')}
+                    <button
+                      onClick={() => onFilterChange({ ...filters, status_mode: undefined })}
+                      className="ml-1.5 hover:text-indigo-900"
                     >
                       ×
                     </button>
@@ -268,7 +311,7 @@ export function FilterBar({
               <button
                 onClick={() => {
                   setSearch('');
-                  onFilterChange({ sort: 'days_until_drop', order: 'asc' });
+                  onFilterChange({ status_mode: 'exclude_pending_delete', sort: 'days_until_drop', order: 'asc' });
                 }}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
