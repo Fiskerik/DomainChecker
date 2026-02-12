@@ -212,11 +212,11 @@ function calculateDomainScore(domainName) {
     }
   }
   
-  // Length scoring
-  if (length <= 4) score.nameQuality += 10;
-  else if (length <= 8) score.nameQuality += 8;
-  else if (length <= 12) score.nameQuality += 5;
-  else score.nameQuality += 2;
+  // Length scoring (requested buckets)
+  if (length >= 2 && length <= 8) score.nameQuality += 18;
+  else if (length >= 9 && length <= 12) score.nameQuality += 12;
+  else if (length >= 13 && length <= 16) score.nameQuality += 6;
+  else if (length >= 17) score.nameQuality -= 10;
   
   // Pronounceability (vowel ratio)
   const vowels = (name.match(/[aeiou]/gi) || []).length;
@@ -278,11 +278,15 @@ function calculateDomainScore(domainName) {
   if (!/[^a-z]/.test(name)) {
     score.technicalMetrics += 5;
   }
+
+  // Penalize very long names so they cannot score unrealistically high
+  if (length >= 17) score.technicalMetrics -= 12;
+  else if (length >= 13) score.technicalMetrics -= 5;
   
-  score.technicalMetrics = Math.min(20, score.technicalMetrics);
+  score.technicalMetrics = Math.max(-12, Math.min(20, score.technicalMetrics));
   
   // CALCULATE TOTAL
-  score.total = score.nameQuality + score.trendingWords + score.historicalValue + score.technicalMetrics;
+  score.total = Math.max(0, Math.min(100, score.nameQuality + score.trendingWords + score.historicalValue + score.technicalMetrics));
   
   // Add badges
   if (score.nameQuality >= 25) score.badges.push('💎 Premium');
@@ -303,22 +307,80 @@ function calculateDomainScore(domainName) {
 // WHOIS VALIDATION
 // ============================================================================
 
+function parseWhoisDate(value) {
+  if (!value) return null;
+  const parsed = new Date(Array.isArray(value) ? value[0] : value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function getWhoisValue(result, keys) {
+  for (const key of keys) {
+    if (result?.[key]) return result[key];
+  }
+  return null;
+}
+
+function isWhoisClearlyRegistered(result) {
+  const statusRaw = [
+    result?.status,
+    result?.domainStatus,
+    result?.domain_status,
+    result?.['Domain Status'],
+  ].flat().filter(Boolean).join(' ').toLowerCase();
+
+  if (/(^|\s)(ok|active|client|server|registered)(\s|$)/.test(statusRaw)) {
+    console.log(`   ℹ️  WHOIS indicates active status: ${statusRaw}`);
+    return true;
+  }
+
+  const creationDate = parseWhoisDate(getWhoisValue(result, ['creationDate', 'createdDate', 'created', 'Creation Date']));
+  if (creationDate) {
+    const daysSinceCreation = Math.floor((Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24));
+    console.log(`   ℹ️  WHOIS creation age: ${daysSinceCreation} days`);
+    if (daysSinceCreation <= 30) return true;
+  }
+
+  const registrar = getWhoisValue(result, ['registrar', 'Registrar Name', 'sponsoringRegistrar']);
+  if (registrar && String(registrar).trim() !== '-') {
+    console.log(`   ℹ️  WHOIS registrar present: ${registrar}`);
+    return true;
+  }
+
+  return false;
+}
+
 async function isActuallyExpiring(domainName) {
   if (!ENABLE_WHOIS_CHECK) return true; // Skip if disabled
   
   try {
     console.log(`   🔍 Checking WHOIS for ${domainName}...`);
     const result = await whois(domainName);
-    
-    // No expiration date = likely available or error
-    if (!result || !result.expirationDate) {
+
+    if (!result || Object.keys(result).length === 0) {
+      console.log('   ⚠️  WHOIS returned no data. Rejecting to avoid false positives.');
       return false;
     }
-    
-    const expiryDate = new Date(result.expirationDate);
+
+    if (isWhoisClearlyRegistered(result)) {
+      console.log('   ⚠️  WHOIS indicates domain is currently registered.');
+      return false;
+    }
+
+    const expiryDate = parseWhoisDate(getWhoisValue(result, [
+      'expirationDate',
+      'expiresDate',
+      'registryExpiryDate',
+      'Registry Expiry Date',
+      'paid_till',
+    ]));
+
+    if (!expiryDate) {
+      console.log('   ⚠️  WHOIS has no parseable expiry date. Rejecting to avoid accepting taken domains.');
+      return false;
+    }
+
     const now = new Date();
-    
-    // Still registered?
     if (expiryDate > now) {
       console.log(`   ⚠️  Still registered until ${expiryDate.toLocaleDateString()}`);
       return false;
@@ -337,8 +399,10 @@ async function isActuallyExpiring(domainName) {
     
   } catch (error) {
     console.log(`   ⚠️  WHOIS check failed: ${error.message}`);
-    // On error, assume it might be expiring (don't filter out)
-    return true;
+    const dnsStatus = await quickDomainCheck(domainName);
+    console.log(`   ℹ️  DNS fallback status: ${dnsStatus}`);
+    // Conservative strategy: do not accept domains when WHOIS fails.
+    return false;
   }
 }
 
@@ -452,13 +516,16 @@ async function upsertDomain(domain) {
       domain_name: domain.domainName,
       tld: domain.domainName.split('.')[1],
       expiry_date: domain.expiryDate,
-      drop_date: dropDate.toISOString(),
+      drop_date: dropDate.toISOString().split('T')[0],
       days_until_drop: daysUntilDrop,
       popularity_score: domain.score.total,
       category,
       registrar: domain.registrar,
+      status: daysUntilDrop >= 0 ? 'pending_delete' : 'dropped',
       slug,
-      scoring_metadata: {
+      title: `${domain.domainName} - Premium Domain Dropping in ${daysUntilDrop} Days`,
+      last_updated: new Date().toISOString(),
+      metadata: {
         nameQuality: domain.score.nameQuality,
         trendingWords: domain.score.trendingWords,
         historicalValue: domain.score.historicalValue,
