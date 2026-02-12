@@ -37,6 +37,7 @@ const WHOIS_RETRY_ATTEMPTS = parseInt(process.env.WHOIS_RETRY_ATTEMPTS || '2', 1
 const WHOIS_RETRY_DELAY_MS = parseInt(process.env.WHOIS_RETRY_DELAY_MS || '1500', 10);
 const WHOIS_FAILURE_COOLDOWN_AFTER = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_AFTER || '10', 10);
 const WHOIS_FAILURE_COOLDOWN_MS = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_MS || '12000', 10);
+const DOMAIN_STATUS_SOURCE = (process.env.DOMAIN_STATUS_SOURCE || 'whois').toLowerCase(); // whois | namecheap
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -83,6 +84,60 @@ async function queryWhoisWithRetry(domainName) {
   }
 
   throw lastError;
+}
+
+async function queryNamecheapAvailability(domainName) {
+  const url = `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(domainName)}`;
+  const response = await axios.get(url, {
+    timeout: 15000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+    responseType: 'text',
+  });
+
+  const html = String(response.data || '');
+  const normalizedHtml = html.toLowerCase().replace(/\s+/g, ' ');
+  const normalizedDomain = domainName.toLowerCase();
+
+  console.log(`   🧪 Namecheap HTML check for ${domainName}: ${normalizedHtml.length} chars`);
+
+  const takenSignals = [
+    `${normalizedDomain} is taken`,
+    `"domain":"${normalizedDomain}","isavailable":false`,
+    'domain is taken',
+    'already registered',
+  ];
+
+  if (takenSignals.some((signal) => normalizedHtml.includes(signal))) {
+    return 'taken';
+  }
+
+  const availableSignals = [
+    `"domain":"${normalizedDomain}","isavailable":true`,
+    `${normalizedDomain}</span>`,
+    `${normalizedDomain}</h`,
+  ];
+
+  if (availableSignals.some((signal) => normalizedHtml.includes(signal))) {
+    return 'available';
+  }
+
+  return 'unknown';
+}
+
+async function isAvailableOnNamecheap(domainName) {
+  try {
+    console.log(`   🔍 Checking Namecheap availability for ${domainName}...`);
+    const availability = await queryNamecheapAvailability(domainName);
+    console.log(`   ℹ️  Namecheap status: ${availability}`);
+    return availability === 'available';
+  } catch (error) {
+    console.log(`   ⚠️  Namecheap availability check failed: ${error.message}`);
+    return false;
+  }
 }
 
 async function getDropCatchToken() {
@@ -399,6 +454,10 @@ function isWhoisClearlyRegistered(result) {
 async function isActuallyExpiring(domainName, context = null) {
   if (!ENABLE_WHOIS_CHECK) return true; // Skip if disabled
 
+  if (DOMAIN_STATUS_SOURCE === 'namecheap') {
+    return isAvailableOnNamecheap(domainName);
+  }
+
   if (context) {
     context.hadWhoisError = false;
   }
@@ -430,6 +489,7 @@ async function isActuallyExpiring(domainName, context = null) {
     ]));
 
     if (!expiryDate) {
+      console.log(`   🧪 WHOIS fields available: ${Object.keys(result).slice(0, 25).join(', ')}`);
       console.log('   ⚠️  WHOIS has no parseable expiry date. Rejecting to avoid accepting taken domains.');
       return false;
     }
@@ -493,6 +553,7 @@ async function scoreAndFilterDomains(domains) {
   };
   
   console.log(`\n📊 Processing ${domains.length} domains...\n`);
+  console.log(`🔧 Domain status source: ${DOMAIN_STATUS_SOURCE}`);
   
   let consecutiveWhoisFailures = 0;
 
