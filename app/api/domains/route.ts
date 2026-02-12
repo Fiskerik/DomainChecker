@@ -36,8 +36,8 @@ export async function GET(request: Request) {
     const daysMax = parseInt(searchParams.get('days_max') || '100');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
     const offset = parseInt(searchParams.get('offset') || '0');
-    const sort = searchParams.get('sort') || 'popularity_score';
-    const order = searchParams.get('order') === 'asc' ? 'asc' : 'desc';
+    const sort = searchParams.get('sort') || 'days_until_drop';
+    const order = searchParams.get('order') === 'desc' ? 'desc' : 'asc';
     const search = searchParams.get('search');
     
     // Build query
@@ -72,9 +72,11 @@ export async function GET(request: Request) {
     }
     
     // Apply sorting
-    const sortColumn = sort === 'drop_date' ? 'drop_date' : 
-                       sort === 'created_at' ? 'created_at' : 
-                       'popularity_score';
+    const sortColumn = sort === 'drop_date' ? 'drop_date' :
+      sort === 'created_at' ? 'created_at' :
+      sort === 'domain_name' ? 'domain_name' :
+      sort === 'days_until_drop' ? 'days_until_drop' :
+      'popularity_score';
     
     query = query.order(sortColumn, { ascending: order === 'asc' });
     

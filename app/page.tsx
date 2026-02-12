@@ -31,7 +31,10 @@ interface Filters {
 export default function ImprovedDomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({
+    sort: 'days_until_drop',
+    order: 'asc',
+  });
   const [stats, setStats] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
@@ -70,12 +73,51 @@ export default function ImprovedDomainsPage() {
       const response = await fetch(`/api/domains?${params}`);
       const data = await response.json();
 
-      setDomains(data.domains || []);
+      const groupedDomains = groupDomainsByRoot(data.domains || []);
+      setDomains(sortDomains(groupedDomains, filters));
     } catch (error) {
       console.error('Error fetching domains:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const groupDomainsByRoot = (domainList: Domain[]) => {
+    const closestPerRoot = new Map<string, Domain>();
+
+    domainList.forEach((domain) => {
+      const root = domain.domain_name.split('.').slice(0, -1).join('.').toLowerCase();
+      const existing = closestPerRoot.get(root);
+
+      if (!existing || domain.days_until_drop < existing.days_until_drop) {
+        closestPerRoot.set(root, domain);
+      }
+    });
+
+    return Array.from(closestPerRoot.values());
+  };
+
+  const sortDomains = (domainList: Domain[], activeFilters: Filters) => {
+    const sortField = activeFilters.sort || 'days_until_drop';
+    const sortOrder = activeFilters.order || 'asc';
+
+    return [...domainList].sort((a, b) => {
+      const direction = sortOrder === 'desc' ? -1 : 1;
+
+      if (sortField === 'domain_name') {
+        return a.domain_name.localeCompare(b.domain_name) * direction;
+      }
+
+      if (sortField === 'drop_date' || sortField === 'created_at') {
+        const aDate = new Date((a as any)[sortField]).getTime();
+        const bDate = new Date((b as any)[sortField]).getTime();
+        return (aDate - bDate) * direction;
+      }
+
+      const aValue = Number((a as any)[sortField] ?? 0);
+      const bValue = Number((b as any)[sortField] ?? 0);
+      return (aValue - bValue) * direction;
+    });
   };
 
   const fetchStats = async () => {
