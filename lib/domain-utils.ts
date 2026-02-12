@@ -89,6 +89,7 @@ export function getDropCatchAffiliateUrl(domainName: string): string {
 
 /**
  * Get DynaDot affiliate URL
+ * Uses all-in-one tracking link with domain parameter
  */
 export function getDynaDotAffiliateUrl(domainName: string): string {
   return `https://www.dynadot.com/?rsc=domainchecker&rsctrn=domainchecker&rscreg=domainchecker&rsceh=domainchecker&rscsb=domainchecker&rscco=domainchecker&rscbo=domainchecker&domain=${encodeURIComponent(domainName)}`;
@@ -96,16 +97,32 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
+ * IMPORTANT: Goes directly to GoDaddy with domain pre-searched and CJ tracking
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
-  const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
-  const adId = '15060776'; 
+  // Your CJ details
+  const publisherId = '7870539';
+  const advertiserName = 'EA Consulting';
+  const aid = '15060776';
+  const campaignId = 'xx-xx_corp_affiliate_15060776_001';
   
-  // Denna URL triggar GoDaddys sökning korrekt utan 404
-  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcdbs`;
-
-  // Vi använder jdoqocy.com som hanterar parametrar bäst
-  return `https://www.jdoqocy.com/click-${publisherId}-${adId}?url=${encodeURIComponent(destinationUrl)}`;
+  // Build GoDaddy search URL with domain already filled in
+  const baseUrl = 'https://www.godaddy.com/domainsearch/find';
+  
+  // All parameters for GoDaddy + CJ tracking
+  const params = new URLSearchParams({
+    checkAvail: '1',
+    domainToCheck: domainName,
+    isc: 'cjcdbs',
+    utm_source: 'cj',
+    utm_medium: 'affiliate',
+    utm_campaign: campaignId,
+    utm_content: `${advertiserName}_${publisherId}`,
+    AID: aid,
+    PID: publisherId,
+  });
+  
+  return `${baseUrl}?${params.toString()}`;
 }
 
 /**
