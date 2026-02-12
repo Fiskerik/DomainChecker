@@ -32,11 +32,57 @@ const NAMEBIO_API_KEY = process.env.NAMEBIO_API_KEY; // Optional
 const MIN_SCORE = 30; // Reject domains below this score
 const ENABLE_WHOIS_CHECK = true; // Set to false to skip WHOIS validation
 const MAX_DOMAINS_TO_PROCESS = parseInt(process.env.MAX_DOMAINS_TO_STORE || '500', 10);
+const WHOIS_REQUEST_DELAY_MS = parseInt(process.env.WHOIS_REQUEST_DELAY_MS || '2000', 10);
+const WHOIS_RETRY_ATTEMPTS = parseInt(process.env.WHOIS_RETRY_ATTEMPTS || '2', 10);
+const WHOIS_RETRY_DELAY_MS = parseInt(process.env.WHOIS_RETRY_DELAY_MS || '1500', 10);
+const WHOIS_FAILURE_COOLDOWN_AFTER = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_AFTER || '10', 10);
+const WHOIS_FAILURE_COOLDOWN_MS = parseInt(process.env.WHOIS_FAILURE_COOLDOWN_MS || '12000', 10);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 if (process.env.NODE_ENV !== 'production') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isWhoisTransientError(errorMessage) {
+  if (!errorMessage) return false;
+  const normalized = String(errorMessage).toLowerCase();
+  return [
+    'econnrefused',
+    'etimedout',
+    'socket hang up',
+    'econnreset',
+    'connection reset',
+  ].some(token => normalized.includes(token));
+}
+
+async function queryWhoisWithRetry(domainName) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= WHOIS_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await whois(domainName);
+    } catch (error) {
+      lastError = error;
+      const transient = isWhoisTransientError(error?.message);
+      const shouldRetry = transient && attempt < WHOIS_RETRY_ATTEMPTS;
+
+      console.log(`   ⚠️  WHOIS attempt ${attempt}/${WHOIS_RETRY_ATTEMPTS} failed: ${error.message}`);
+
+      if (shouldRetry) {
+        console.log(`   ℹ️  Retrying WHOIS in ${WHOIS_RETRY_DELAY_MS}ms...`);
+        await sleep(WHOIS_RETRY_DELAY_MS);
+      } else {
+        break;
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 async function getDropCatchToken() {
@@ -350,12 +396,20 @@ function isWhoisClearlyRegistered(result) {
   return false;
 }
 
-async function isActuallyExpiring(domainName) {
+async function isActuallyExpiring(domainName, context = null) {
   if (!ENABLE_WHOIS_CHECK) return true; // Skip if disabled
+
+  if (context) {
+    context.hadWhoisError = false;
+  }
+
+  const progressLabel = context
+    ? `[${context.currentIndex}/${context.totalDomains}] `
+    : '';
   
   try {
-    console.log(`   🔍 Checking WHOIS for ${domainName}...`);
-    const result = await whois(domainName);
+    console.log(`   🔍 ${progressLabel}Checking WHOIS for ${domainName}...`);
+    const result = await queryWhoisWithRetry(domainName);
 
     if (!result || Object.keys(result).length === 0) {
       console.log('   ⚠️  WHOIS returned no data. Rejecting to avoid false positives.');
@@ -398,6 +452,10 @@ async function isActuallyExpiring(domainName) {
     return true;
     
   } catch (error) {
+    if (context) {
+      context.hadWhoisError = true;
+    }
+
     console.log(`   ⚠️  WHOIS check failed: ${error.message}`);
     const dnsStatus = await quickDomainCheck(domainName);
     console.log(`   ℹ️  DNS fallback status: ${dnsStatus}`);
@@ -436,8 +494,12 @@ async function scoreAndFilterDomains(domains) {
   
   console.log(`\n📊 Processing ${domains.length} domains...\n`);
   
-  for (const domain of domains) {
-    console.log(`\n🔍 Processing: ${domain.domainName}`);
+  let consecutiveWhoisFailures = 0;
+
+  for (let index = 0; index < domains.length; index++) {
+    const domain = domains[index];
+    const currentIndex = index + 1;
+    console.log(`\n🔍 Processing [${currentIndex}/${domains.length}]: ${domain.domainName}`);
     
     // Step 1: Score the domain
     const score = calculateDomainScore(domain.domainName);
@@ -451,13 +513,31 @@ async function scoreAndFilterDomains(domains) {
     console.log(`   ✅ Score: ${score.total}/100 - ${score.reasoning}`);
     
     // Step 2: WHOIS validation
-    const isExpiring = await isActuallyExpiring(domain.domainName);
+    const whoisContext = {
+      currentIndex,
+      totalDomains: domains.length,
+      hadWhoisError: false,
+    };
+    const isExpiring = await isActuallyExpiring(domain.domainName, whoisContext);
     
     if (!isExpiring) {
       console.log(`   ❌ WHOIS validation failed - Still registered`);
       rejected.stillRegistered++;
+      if (whoisContext.hadWhoisError) {
+        consecutiveWhoisFailures++;
+      } else {
+        consecutiveWhoisFailures = 0;
+      }
+
+      if (ENABLE_WHOIS_CHECK && consecutiveWhoisFailures > 0 && consecutiveWhoisFailures % WHOIS_FAILURE_COOLDOWN_AFTER === 0) {
+        console.log(`   ⏳ Cooling down WHOIS checks for ${WHOIS_FAILURE_COOLDOWN_MS}ms after ${consecutiveWhoisFailures} consecutive failures...`);
+        await sleep(WHOIS_FAILURE_COOLDOWN_MS);
+      }
+
       continue;
     }
+
+    consecutiveWhoisFailures = 0;
     
     // ACCEPTED!
     const badge = score.badges[0] || '📋';
@@ -470,7 +550,7 @@ async function scoreAndFilterDomains(domains) {
     
     // Rate limit: Wait 2 seconds between WHOIS checks
     if (ENABLE_WHOIS_CHECK) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await sleep(WHOIS_REQUEST_DELAY_MS);
     }
   }
   
@@ -554,6 +634,8 @@ async function main() {
   console.log('='.repeat(80));
   console.log(`⚙️  Min Score:        ${MIN_SCORE}/100`);
   console.log(`⚙️  WHOIS Check:      ${ENABLE_WHOIS_CHECK ? '✅ Enabled' : '❌ Disabled'}`);
+  console.log(`⚙️  WHOIS Delay:      ${WHOIS_REQUEST_DELAY_MS}ms`);
+  console.log(`⚙️  WHOIS Retries:    ${WHOIS_RETRY_ATTEMPTS}`);
   console.log(`⚙️  NameBio API:      ${NAMEBIO_API_KEY ? '✅ Enabled' : '❌ Disabled'}`);
   console.log('='.repeat(80) + '\n');
   
