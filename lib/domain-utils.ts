@@ -58,7 +58,7 @@ export function getBackorderPrice(provider: 'dropcatch' | 'snapnames' | 'godaddy
   const prices = {
     dropcatch: '$59',
     snapnames: '$69',
-    godaddy: '$25',
+    godaddy: '$24.99',
   };
   return prices[provider] || '$59';
 }
@@ -96,19 +96,17 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Fixad version för att undvika "Offer not found"
+ * Uppdaterad för att använda anrdoezrs.net för stabilare omdirigering
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
-  // Baserat på din bild: PID=7870539, AID=1513033
   const advertiserId = process.env.NEXT_PUBLIC_GODADDY_ADVERTISER_ID || '1513033';
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
   
   // Destinationen hos GoDaddy som utför sökningen
   const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos1`;
-  
-  // CJ kräver ofta jdoqocy.com eller anrdoezrs.net för deep links
-  // Vi använder den rekommenderade strukturen: click-[PID]-[AID]?url=[DESTINATION]
-  return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
+
+  // Vi använder anrdoezrs.net som är standard för fungerande GoDaddy-länkar i CJ
+  return `https://www.anrdoezrs.net/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(destinationUrl)}`;
 }
 
 /**
@@ -145,6 +143,13 @@ export function getAllAffiliateOptions(domainName: string): AffiliateOption[] {
       type: 'register',
       commission: '$1-3',
     },
+    {
+      name: 'DropCatch',
+      price: '$59',
+      url: getDropCatchAffiliateUrl(domainName),
+      type: 'backorder',
+      commission: '~$9 (15%)',
+    }
   ];
 }
 
