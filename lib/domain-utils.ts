@@ -96,21 +96,18 @@ export function getDynaDotAffiliateUrl(domainName: string): string {
 
 /**
  * Get GoDaddy affiliate URL via CJ
- * Uppdaterad med fungerande struktur från jdoqocy.com
+ * Points directly to the search engine to pre-fill the domain
  */
 export function getGoDaddyAffiliateUrl(domainName: string): string {
-  // PID (Ditt Publisher ID)
+  // From your environment variables
   const publisherId = process.env.NEXT_PUBLIC_GODADDY_CJ_PID || '7870539';
+  const advertiserId = process.env.NEXT_PUBLIC_GODADDY_ADVERTISER_ID || '1513033';
   
-  // Denna sifferkod (11432185) kommer från din fungerande länk och verkar vara 
-  // den specifika kampanj-länken som GoDaddy accepterar för deep linking.
-  const adId = '11432185';
-  
-  // Slutdestinationen med sökparametern
-  const destinationUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos3`;
+  // This is the GoDaddy engine URL that accepts a "domainToCheck" parameter
+  const godaddySearchUrl = `https://www.godaddy.com/domainsearch/find?domainToCheck=${encodeURIComponent(domainName)}&isc=cjcfos3`;
 
-  // Konstruerar länken med den domän du föreslog (jdoqocy.com)
-  return `https://www.jdoqocy.com/click-${publisherId}-${adId}?url=${encodeURIComponent(destinationUrl)}`;
+  // Wrap it in the CJ deep link format that proved working in your last attempt
+  return `https://www.jdoqocy.com/click-${publisherId}-${advertiserId}?url=${encodeURIComponent(godaddySearchUrl)}`;
 }
 
 /**
