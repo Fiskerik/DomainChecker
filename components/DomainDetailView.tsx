@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Calendar, TrendingUp, Share2, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Calendar, TrendingUp, Share2, ArrowLeft } from 'lucide-react';
 import { 
   getNamecheapAffiliateUrl, 
-  getDropCatchAffiliateUrl, 
+  getGoDaddyAffiliateUrl,
+  getDynaDotAffiliateUrl,
   getEstimatedValue,
   getDomainRoot
 } from '@/lib/domain-utils';
@@ -56,7 +57,7 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
     return () => clearInterval(interval);
   }, [domain.drop_date]);
 
-  const handleAffiliateClick = async (type: 'namecheap' | 'dropcatch') => {
+  const handleAffiliateClick = async (type: 'namecheap' | 'godaddy' | 'dynadot') => {
     setIsTracking(true);
     try {
       await fetch('/api/track/click', {
@@ -75,7 +76,8 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
 
     const affiliateUrls = {
       namecheap: getNamecheapAffiliateUrl(domain.domain_name),
-      dropcatch: getDropCatchAffiliateUrl(domain.domain_name),
+      godaddy: getGoDaddyAffiliateUrl(domain.domain_name),
+      dynadot: getDynaDotAffiliateUrl(domain.domain_name),
     };
 
     window.open(affiliateUrls[type], '_blank');
@@ -160,14 +162,22 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Actions - Matching Card Design */}
           <div className="p-4 sm:p-6 space-y-3">
             <button
-              onClick={() => handleAffiliateClick('dropcatch')}
+              onClick={() => handleAffiliateClick('godaddy')}
               disabled={isTracking}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 sm:py-4 px-4 rounded-lg transition-colors disabled:opacity-50 text-sm sm:text-base"
             >
-              🎯 Backorder on DropCatch ($59)
+              GoDaddy $24.99
+            </button>
+
+            <button
+              onClick={() => handleAffiliateClick('dynadot')}
+              disabled={isTracking}
+              className="w-full bg-gray-800 hover:bg-black text-white font-semibold py-3 sm:py-4 px-4 rounded-lg transition-colors disabled:opacity-50 text-sm sm:text-base"
+            >
+              DynaDot $9.99
             </button>
 
             <button
@@ -175,7 +185,7 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
               disabled={isTracking}
               className="w-full border-2 border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-3 sm:py-4 px-4 rounded-lg transition-colors disabled:opacity-50 text-sm sm:text-base"
             >
-              Check on Namecheap
+              Namecheap
             </button>
           </div>
 
@@ -236,3 +246,5 @@ export function DomainDetailView({ domain, similarDomains }: DomainDetailViewPro
     </div>
   );
 }
+
+export default DomainDetailView;
