@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Cleanup Script
+ * Cleanup Script (ES Module Version)
  * 
  * This script:
  * 1. Updates status of all existing domains
@@ -16,7 +16,10 @@
  * - SUPABASE_SERVICE_ROLE_KEY
  */
 
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -362,13 +365,11 @@ async function main() {
 }
 
 // Run the script
-if (require.main === module) {
-  main()
-    .then(() => process.exit(0))
-    .catch(err => {
-      console.error(err);
-      process.exit(1);
-    });
-}
+main()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
 
-module.exports = { main };
+export { main };
