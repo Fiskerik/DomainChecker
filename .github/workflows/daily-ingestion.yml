@@ -29,9 +29,11 @@ jobs:
       - name: Fetch and store domains
         run: node scripts/ingest-dropcatch.js
         env:
+          - name: Fetch and store domains
+        run: node scripts/ingest-dropcatch.js
+        env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Uppdaterade DropCatch-variabler nedan:
           DROPCATCH_CLIENT_ID: ${{ secrets.DROPCATCH_CLIENT_ID }}
           DROPCATCH_CLIENT_SECRET: ${{ secrets.DROPCATCH_PASSWORD }}
 
