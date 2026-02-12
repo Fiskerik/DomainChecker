@@ -23,6 +23,7 @@ interface Filters {
   tld?: string;
   category?: string;
   min_score?: number;
+  max_score?: number;
   sort?: string;
   order?: string;
   search?: string;
@@ -168,7 +169,7 @@ export default function ImprovedDomainsPage() {
           <div className="text-center py-20">
             <p className="text-gray-500 text-base sm:text-lg">No domains found</p>
             <button
-              onClick={() => setFilters({})}
+              onClick={() => setFilters({ sort: 'days_until_drop', order: 'asc' })}
               className="mt-4 text-sm sm:text-base text-blue-600 hover:text-blue-700"
             >
               Clear filters

@@ -33,6 +33,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const MAX_DOMAINS_TO_STORE = parseInt(process.env.MAX_DOMAINS_TO_STORE || '100', 10);
+const MIN_POPULARITY_SCORE = parseInt(process.env.MIN_POPULARITY_SCORE || '0', 10);
+
 //const { isActuallyExpiring } = require('../lib/whois-validator.ts');
 
 
@@ -74,7 +77,7 @@ async function fetchDropCatchDomains() {
     const csvData = zipEntries[0].getData().toString('utf8');
     const records = parse(csvData, { columns: true, skip_empty_lines: true });
 
-    const domains = records.map(row => {
+    const parsedDomains = records.map(row => {
       // DropCatch CSV-kolumner kan heta olika saker, vi kollar de vanligaste:
       const rawName = row.DomainName || row.name || row.Domain;
       const rawDropDate = row.DropDate || row.drop_date;
@@ -95,11 +98,21 @@ async function fetchDropCatchDomains() {
         registrar: row.Registrar || 'Unknown'
       };
     })
-    .filter(Boolean)
-    .slice(0, 250); // <--- LÄGG TILL DENNA RAD HÄR
+    .filter(Boolean);
 
-    console.log(`✅ Successfully processed ${domains.length} domains from DropCatch CSV\n`);
-    return domains;
+    const rankedDomains = parsedDomains
+      .map((domain) => ({
+        ...domain,
+        popularityScore: calculatePopularityScore(domain.domainName),
+      }))
+      .filter((domain) => domain.popularityScore >= MIN_POPULARITY_SCORE)
+      .sort((a, b) => b.popularityScore - a.popularityScore)
+      .slice(0, 250)
+      .map(({ popularityScore, ...domain }) => domain);
+
+    console.log(`✅ Successfully processed ${parsedDomains.length} domains from DropCatch CSV`);
+    console.log(`📈 Selected top ${rankedDomains.length} domains by popularity score (min ${MIN_POPULARITY_SCORE}, max ${MAX_DOMAINS_TO_STORE})\n`);
+    return rankedDomains;
 
   } catch (error) {
     console.error('❌ Misslyckades att hämta DropCatch-data:', error.message);
