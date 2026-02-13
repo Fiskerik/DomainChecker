@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -6,114 +6,126 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const range = searchParams.get('range') || 'week';
+// Mark as dynamic to avoid static generation issues
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge'; // Optional: use edge runtime for faster responses
 
-    // Calculate date filter
-    const now = new Date();
-    let startDate = new Date();
-    
-    switch (range) {
-      case 'today':
-        startDate.setHours(0, 0, 0, 0);
-        break;
-      case 'week':
-        startDate.setDate(now.getDate() - 7);
-        break;
-      case 'month':
-        startDate.setDate(now.getDate() - 30);
-        break;
-      case 'all':
-      default:
-        startDate = new Date(0); // Beginning of time
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { event_type, domain_slug, domain_name, registrar } = body;
+
+    if (!event_type) {
+      return NextResponse.json(
+        { error: 'event_type is required' },
+        { status: 400 }
+      );
     }
 
-    // Get total domains
-    const { count: total_domains } = await supabase
-      .from('domains')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending_delete');
+    // Get search params instead of request.url
+    const searchParams = request.nextUrl.searchParams;
+    const referrer = request.headers.get('referer') || 'direct';
+    const userAgent = request.headers.get('user-agent') || 'unknown';
 
-    // Get views in range
-    const { data: views } = await supabase
-      .from('domain_views')
-      .select('*')
-      .gte('viewed_at', startDate.toISOString());
+    switch (event_type) {
+      case 'domain_view':
+        if (!domain_slug) {
+          return NextResponse.json(
+            { error: 'domain_slug required for domain_view' },
+            { status: 400 }
+          );
+        }
 
-    // Get clicks in range
-    const { data: clicks } = await supabase
-      .from('affiliate_clicks')
-      .select('*')
-      .gte('clicked_at', startDate.toISOString());
+        // Increment view count
+        await supabase
+          .from('domains')
+          .update({ 
+            view_count: supabase.rpc('increment', { row_id: domain_slug })
+          })
+          .eq('slug', domain_slug);
 
-    const total_views = views?.length || 0;
-    const total_clicks = clicks?.length || 0;
-    const ctr = total_views > 0 ? (total_clicks / total_views) * 100 : 0;
+        // Log view event
+        await supabase
+          .from('domain_views')
+          .insert({
+            domain_slug,
+            viewed_at: new Date().toISOString(),
+            referrer,
+            user_agent: userAgent,
+          });
 
-    // Clicks by affiliate
-    const clicks_by_affiliate: Record<string, number> = {};
-    clicks?.forEach(click => {
-      const type = click.affiliate_type || 'unknown';
-      clicks_by_affiliate[type] = (clicks_by_affiliate[type] || 0) + 1;
-    });
+        break;
 
-    // Top domains
-    const { data: topDomains } = await supabase
-      .from('domains')
-      .select('domain_name, click_count_total, view_count')
-      .eq('status', 'pending_delete')
-      .order('click_count_total', { ascending: false })
-      .limit(10);
+      case 'affiliate_click':
+        if (!domain_name || !registrar) {
+          return NextResponse.json(
+            { error: 'domain_name and registrar required for affiliate_click' },
+            { status: 400 }
+          );
+        }
 
-    const top_domains = (topDomains || []).map(d => ({
-      ...d,
-      ctr: d.view_count > 0 ? (d.click_count_total / d.view_count) * 100 : 0,
-    }));
+        // Increment click count
+        await supabase
+          .from('domains')
+          .update({
+            click_count_total: supabase.rpc('increment', { row_id: domain_slug || domain_name }),
+          })
+          .eq('domain_name', domain_name);
 
-    // Estimated revenue
-    const estimated_revenue = {
-      today: estimateRevenue(clicks_by_affiliate, 'day'),
-      week: estimateRevenue(clicks_by_affiliate, 'week'),
-      month: estimateRevenue(clicks_by_affiliate, 'month'),
-    };
+        // Log click event
+        await supabase
+          .from('affiliate_clicks')
+          .insert({
+            domain_name,
+            registrar: registrar.toLowerCase(),
+            clicked_at: new Date().toISOString(),
+            referrer,
+            user_agent: userAgent,
+          });
 
-    return NextResponse.json({
-      total_domains,
-      total_views,
-      total_clicks,
-      ctr,
-      clicks_by_affiliate,
-      top_domains,
-      estimated_revenue,
-    });
+        break;
 
-  } catch (error: any) {
+      default:
+        return NextResponse.json(
+          { error: 'Invalid event_type' },
+          { status: 400 }
+        );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
     console.error('Analytics error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch analytics' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
-function estimateRevenue(clicks: Record<string, number>, period: string): number {
-  const multiplier = period === 'day' ? 1 : period === 'week' ? 7 : 30;
-  
-  const rates = {
-    dropcatch: 0.9,    // $9 per conversion at 10%
-    namecheap: 0.24,   // $3 per conversion at 8%
-    godaddy: 1.8,      // $15 per conversion at 12%
-    snapnames: 1.0,    // $10 per conversion at 10%
-    dynadot: 0.16,     // $2 per conversion at 8%
-  };
+export async function GET(request: NextRequest) {
+  // Return analytics summary instead of using request.url
+  try {
+    const { data: topDomains } = await supabase
+      .from('domains')
+      .select('domain_name, view_count, click_count_total')
+      .order('view_count', { ascending: false })
+      .limit(10);
 
-  let total = 0;
-  Object.entries(clicks).forEach(([affiliate, count]) => {
-    const rate = rates[affiliate.toLowerCase() as keyof typeof rates] || 0.5;
-    total += count * rate;
-  });
+    const { data: recentClicks } = await supabase
+      .from('affiliate_clicks')
+      .select('domain_name, registrar, clicked_at')
+      .order('clicked_at', { ascending: false })
+      .limit(10);
 
-  return total * multiplier;
+    return NextResponse.json({
+      top_domains: topDomains,
+      recent_clicks: recentClicks,
+    });
+  } catch (error) {
+    console.error('Analytics fetch error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch analytics' },
+      { status: 500 }
+    );
+  }
 }
