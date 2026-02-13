@@ -120,7 +120,7 @@ export default function ImprovedDomainsPage() {
       </header>
 
       {/* Stats Bar - Compact on mobile */}
-      {stats && <StatsBar stats={stats} />}
+      {stats && <StatsBar initialStats={stats} />}
 
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Filter Bar */}
