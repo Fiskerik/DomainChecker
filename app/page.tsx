@@ -4,42 +4,18 @@ import { useEffect, useState } from 'react';
 import { DomainCard } from '@/components/DomainCard';
 import { FilterBar } from '@/components/FilterBar';
 import { StatsBar } from '@/components/StatsBar';
-
-interface Domain {
-  id: number;
-  domain_name: string;
-  tld: string;
-  drop_date: string;
-  days_until_drop: number;
-  popularity_score: number;
-  category: string;
-  registrar: string;
-  view_count: number;
-  click_count_total: number;
-  slug: string;
-}
-
-interface Filters {
-  status_mode?: 'exclude_pending_delete' | 'all' | 'pending_delete' | 'grace' | 'redemption' | 'dropped';
-  tld?: string;
-  category?: string;
-  min_score?: number;
-  max_score?: number;
-  sort?: string;
-  order?: string;
-  search?: string;
-}
+import type { Domain, DomainFilters, DomainStats, ViewMode } from '@/types/domain';
 
 export default function ImprovedDomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>({
+  const [filters, setFilters] = useState<DomainFilters>({
     status_mode: 'exclude_pending_delete',
     sort: 'days_until_drop',
     order: 'asc',
   });
-  const [stats, setStats] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [stats, setStats] = useState<DomainStats | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -54,7 +30,7 @@ export default function ImprovedDomainsPage() {
   }, []);
 
   // Save view preference
-  const handleViewModeChange = (mode: 'card' | 'list') => {
+  const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
     localStorage.setItem('viewMode', mode);
   };
@@ -80,13 +56,38 @@ export default function ImprovedDomainsPage() {
       const params = new URLSearchParams({
         limit: String(DOMAINS_PER_PAGE),
         offset: String((currentPage - 1) * DOMAINS_PER_PAGE),
-        ...(filters as any),
+      });
+
+      // Add filters dynamically
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          params.append(key, String(value));
+        }
       });
 
       const response = await fetch(`/api/domains?${params}`);
       const data = await response.json();
 
-      setDomains(data.domains || []);
+      // Normalize domains to match Domain interface
+      const normalizedDomains: Domain[] = (data.domains || []).map((d: any) => ({
+        id: String(d.id),
+        domain_name: d.domain_name,
+        slug: d.slug,
+        tld: d.tld,
+        expiry_date: d.expiry_date || d.drop_date, // Fallback
+        drop_date: d.drop_date,
+        days_until_drop: d.days_until_drop,
+        popularity_score: d.popularity_score,
+        category: d.category,
+        status: d.status || 'pending_delete',
+        registrar: d.registrar,
+        estimated_value: d.estimated_value,
+        view_count: d.view_count || 0,
+        click_count_total: d.click_count_total || 0,
+        metadata: d.metadata,
+      }));
+
+      setDomains(normalizedDomains);
       setTotalCount(data.count || 0);
     } catch (error) {
       console.error('Error fetching domains:', error);
