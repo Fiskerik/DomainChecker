@@ -22,7 +22,7 @@
  * - RESEND_API_KEY (if using Resend for email)
  */
 
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
