@@ -5,16 +5,16 @@ import Link from 'next/link';
 import { ExternalLink, TrendingUp, Calendar, Star } from 'lucide-react';
 
 interface Domain {
-  id: string;
+  id: number | string;
   domain_name: string;
   slug: string;
   tld: string;
-  expiry_date: string;
+  expiry_date?: string;
   drop_date: string;
   days_until_drop: number;
   popularity_score: number;
   category: string;
-  status: string;
+  status?: string;
   estimated_value?: string;
 }
 
@@ -24,7 +24,7 @@ interface DomainPrice {
   currency: string;
 }
 
-export function DomainCard({ domain }: { domain: Domain }) {
+export function DomainCard({ domain, viewMode = 'card' }: { domain: Domain; viewMode?: 'card' | 'list' }) {
   const [prices, setPrices] = useState<DomainPrice[]>([
     { registrar: 'Loading...', price: 0, currency: 'USD' }
   ]);
