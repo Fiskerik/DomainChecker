@@ -52,14 +52,14 @@ export function FilterBar({
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* Search Bar */}
       <form onSubmit={handleSearch} className="p-3 sm:p-4 border-b border-gray-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+        <div className="relative w-full">
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search domains..."
-            className="w-full pl-10 pr-4 py-2 sm:py-2.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="block w-full max-w-none appearance-none pl-10 pr-4 py-2 sm:py-2.5 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </form>
@@ -167,7 +167,7 @@ export function FilterBar({
                 max={100}
                 value={minScore}
                 onChange={(e) => updateScoreRange(Number(e.target.value), maxScore)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 aria-label="Minimum popularity score"
               />
             </div>
@@ -179,7 +179,7 @@ export function FilterBar({
                 max={100}
                 value={maxScore}
                 onChange={(e) => updateScoreRange(minScore, Number(e.target.value))}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 aria-label="Maximum popularity score"
               />
             </div>
@@ -193,7 +193,7 @@ export function FilterBar({
             <select
               value={filters.sort || 'days_until_drop'}
               onChange={(e) => onFilterChange({ ...filters, sort: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="days_until_drop">Time Left to Expiry</option>
               <option value="popularity_score">Popularity</option>
@@ -208,7 +208,7 @@ export function FilterBar({
             <select
               value={filters.order || 'asc'}
               onChange={(e) => onFilterChange({ ...filters, order: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 text-base sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="asc">Ascending ↑</option>
               <option value="desc">Descending ↓</option>
