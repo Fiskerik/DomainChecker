@@ -6,6 +6,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type DomainRecord = {
   id: number;
   domain_name: string;

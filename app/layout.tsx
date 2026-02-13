@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://domain-checker-henna.vercel.app')),
   title: 'DropWatch - Hitta utgående domäner',
   description: 'Bevaka domäner i Pending Delete-stadiet',
   // Lägg till verifiering här
