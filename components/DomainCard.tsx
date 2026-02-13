@@ -4,16 +4,16 @@ import Link from 'next/link';
 import { Calendar, TrendingUp, Eye, MousePointerClick } from 'lucide-react';
 
 interface Domain {
-  id: string;
+  id: number | string;
   domain_name: string;
   slug: string;
   tld: string;
-  expiry_date: string;
+  expiry_date?: string;
   drop_date: string;
   days_until_drop: number;
   popularity_score: number;
   category: string;
-  status: string;
+  status?: string;
   registrar?: string;
   estimated_value?: string;
   view_count?: number;
