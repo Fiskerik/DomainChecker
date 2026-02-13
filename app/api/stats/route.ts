@@ -6,78 +6,74 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-/**
- * GET /api/stats
- * 
- * Get database statistics
- */
+export const dynamic = 'force-dynamic'; // Disable caching
+export const revalidate = 0;
+
 export async function GET() {
   try {
-    // Count domains by status
-    const { data: allDomains } = await supabase
+    // Get total pending delete domains
+    const { count: totalPending } = await supabase
       .from('domains')
-      .select('status');
-    
-    const byStatus = allDomains?.reduce((acc, d) => {
-      acc[d.status] = (acc[d.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {};
-    
-    // Count pending delete by TLD
-    const { data: pendingDomains } = await supabase
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending_delete')
+      .gte('days_until_drop', 0)
+      .lte('days_until_drop', 10);
+
+    // Get high interest domains (70+ score)
+    const { count: hotDomains } = await supabase
+      .from('domains')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending_delete')
+      .gte('popularity_score', 70)
+      .gte('days_until_drop', 0)
+      .lte('days_until_drop', 10);
+
+    // Get domains dropping this week (0-7 days)
+    const { count: droppingThisWeek } = await supabase
+      .from('domains')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending_delete')
+      .gte('days_until_drop', 0)
+      .lte('days_until_drop', 7);
+
+    // Get TLD distribution
+    const { data: tldData } = await supabase
       .from('domains')
       .select('tld')
-      .eq('status', 'pending_delete');
-    
-    const byTLD = pendingDomains?.reduce((acc, d) => {
-      acc[d.tld] = (acc[d.tld] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {};
-    
-    // Count by category
-    const { data: categorizedDomains } = await supabase
-      .from('domains')
-      .select('category')
-      .eq('status', 'pending_delete');
-    
-    const byCategory = categorizedDomains?.reduce((acc, d) => {
-      acc[d.category] = (acc[d.category] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {};
-    
-    // Get total pending delete count
-    const { count: pendingCount } = await supabase
-      .from('domains')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending_delete');
-    
-    // Get hot domains count (high popularity)
-    const { count: hotCount } = await supabase
-      .from('domains')
-      .select('*', { count: 'exact', head: true })
       .eq('status', 'pending_delete')
-      .gte('popularity_score', 70);
-    
-    // Get dropping this week count
-    const { count: weekCount } = await supabase
-      .from('domains')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending_delete')
-      .lte('days_until_drop', 7);
-    
-    return NextResponse.json({
-      total_pending: pendingCount || 0,
-      hot_domains: hotCount || 0,
-      dropping_this_week: weekCount || 0,
-      by_status: byStatus,
-      by_tld: byTLD,
-      by_category: byCategory,
+      .gte('days_until_drop', 0)
+      .lte('days_until_drop', 10);
+
+    // Count domains by TLD
+    const byTld: Record<string, number> = {};
+    tldData?.forEach(({ tld }) => {
+      byTld[tld] = (byTld[tld] || 0) + 1;
     });
-    
+
+    const stats = {
+      total_pending: totalPending || 0,
+      hot_domains: hotDomains || 0,
+      dropping_this_week: droppingThisWeek || 0,
+      by_tld: byTld,
+      last_updated: new Date().toISOString(),
+    };
+
+    return NextResponse.json(stats, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
+    });
   } catch (error) {
-    console.error('Stats error:', error);
+    console.error('Stats fetch error:', error);
+    
     return NextResponse.json(
-      { error: 'Failed to fetch stats' },
+      {
+        total_pending: 0,
+        hot_domains: 0,
+        dropping_this_week: 0,
+        by_tld: {},
+        error: 'Failed to fetch stats',
+      },
       { status: 500 }
     );
   }
