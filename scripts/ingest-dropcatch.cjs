@@ -8,7 +8,7 @@
  * 
  * API Documentation: https://www.dropcatch.com/help/api
  * 
- * Run: node scripts/ingest-dropcatch.js
+ * Run: node scripts/ingest-dropcatch.cjs
  * 
  * Required env vars:
  * - NEXT_PUBLIC_SUPABASE_URL
