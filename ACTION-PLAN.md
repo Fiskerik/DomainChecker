@@ -54,7 +54,7 @@ for (let i = 0; i < 100; i++) {
 return allDomains;
 ```
 
-Or just run: `node scripts/ingest.js` locally to get real data.
+Or just run: `node scripts/ingest.cjs` locally to get real data.
 
 **Why this matters:** More domains = more pages indexed = more SEO traffic = more revenue
 
