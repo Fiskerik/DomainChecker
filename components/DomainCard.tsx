@@ -46,7 +46,7 @@ export function DomainCard({ domain, viewMode = 'card' }: DomainCardProps) {
   if (viewMode === 'list') {
     return (
       <Link 
-        href={`/domains/${domain.slug}`}
+        href={`/domain/${domain.slug}`}
         className="group block rounded-lg border border-slate-200 bg-white p-4 transition-all hover:border-slate-300 hover:shadow-md"
       >
         <div className="flex items-center justify-between gap-4">
@@ -86,7 +86,7 @@ export function DomainCard({ domain, viewMode = 'card' }: DomainCardProps) {
   // CARD VIEW (default)
   return (
     <Link 
-      href={`/domains/${domain.slug}`}
+      href={`/domain/${domain.slug}`}
       className="group block rounded-lg border border-slate-200 bg-white p-4 transition-all hover:border-slate-300 hover:shadow-md"
     >
       {/* Header */}
