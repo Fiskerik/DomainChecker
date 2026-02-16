@@ -73,18 +73,21 @@ export function StatsBar({ initialStats }: { initialStats?: Stats }) {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm text-slate-600">Total Pending Delete</p>
+            <p className="text-sm text-slate-600">Available Domains</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.total_pending}</p>
+            <p className="text-xs text-slate-500 mt-1">Ready to register</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm text-slate-600">High Interest Domains (70+)</p>
+            <p className="text-sm text-slate-600">High Quality (70+)</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.hot_domains}</p>
+            <p className="text-xs text-slate-500 mt-1">Premium selections</p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm text-slate-600">Dropping This Week</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.dropping_this_week}</p>
+            <p className="text-xs text-slate-500 mt-1">Next 7 days</p>
           </div>
         </div>
 

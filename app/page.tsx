@@ -4,22 +4,46 @@ import { useEffect, useState } from 'react';
 import { DomainCard } from '@/components/DomainCard';
 import { FilterBar } from '@/components/FilterBar';
 import { StatsBar } from '@/components/StatsBar';
-import type { Domain, DomainFilters, DomainStats, ViewMode } from '@/types/domain';
+import { Pagination } from '@/components/Pagination';
+
+interface Domain {
+  id: number;
+  domain_name: string;
+  tld: string;
+  drop_date: string;
+  days_until_drop: number;
+  popularity_score: number;
+  category: string;
+  registrar: string;
+  view_count: number;
+  click_count_total: number;
+  slug: string;
+}
+
+interface Filters {
+  status_mode?: 'exclude_pending_delete' | 'all' | 'pending_delete' | 'grace' | 'redemption' | 'dropped';
+  tld?: string;
+  category?: string;
+  min_score?: number;
+  max_score?: number;
+  sort?: string;
+  order?: string;
+  search?: string;
+}
 
 export default function ImprovedDomainsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<DomainFilters>({
-    status_mode: 'exclude_pending_delete',
-    sort: 'days_until_drop',
-    order: 'asc',
+  const [filters, setFilters] = useState<Filters>({
+    status_mode: 'pending_delete', // Changed to show available domains
+    sort: 'popularity_score',
+    order: 'desc', // Show best domains first
   });
-  const [stats, setStats] = useState<DomainStats | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const [stats, setStats] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [totalCount, setTotalCount] = useState(0);
-
-  const DOMAINS_PER_PAGE = 50;
 
   // Load view preference from localStorage
   useEffect(() => {
@@ -30,7 +54,7 @@ export default function ImprovedDomainsPage() {
   }, []);
 
   // Save view preference
-  const handleViewModeChange = (mode: ViewMode) => {
+  const handleViewModeChange = (mode: 'card' | 'list') => {
     setViewMode(mode);
     localStorage.setItem('viewMode', mode);
   };
@@ -38,12 +62,12 @@ export default function ImprovedDomainsPage() {
   // Fetch domains
   useEffect(() => {
     fetchDomains();
-  }, [filters, currentPage]);
+  }, [filters, currentPage, itemsPerPage]);
 
-  // Reset to first page whenever filters change
+  // Reset to first page when filters or items per page change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters]);
+  }, [filters, itemsPerPage]);
 
   // Fetch stats once
   useEffect(() => {
@@ -54,40 +78,15 @@ export default function ImprovedDomainsPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        limit: String(DOMAINS_PER_PAGE),
-        offset: String((currentPage - 1) * DOMAINS_PER_PAGE),
-      });
-
-      // Add filters dynamically
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== '') {
-          params.append(key, String(value));
-        }
+        limit: String(itemsPerPage),
+        offset: String((currentPage - 1) * itemsPerPage),
+        ...(filters as any),
       });
 
       const response = await fetch(`/api/domains?${params}`);
       const data = await response.json();
 
-      // Normalize domains to match Domain interface
-      const normalizedDomains: Domain[] = (data.domains || []).map((d: any) => ({
-        id: String(d.id),
-        domain_name: d.domain_name,
-        slug: d.slug,
-        tld: d.tld,
-        expiry_date: d.expiry_date || d.drop_date, // Fallback
-        drop_date: d.drop_date,
-        days_until_drop: d.days_until_drop,
-        popularity_score: d.popularity_score,
-        category: d.category,
-        status: d.status || 'pending_delete',
-        registrar: d.registrar,
-        estimated_value: d.estimated_value,
-        view_count: d.view_count || 0,
-        click_count_total: d.click_count_total || 0,
-        metadata: d.metadata,
-      }));
-
-      setDomains(normalizedDomains);
+      setDomains(data.domains || []);
       setTotalCount(data.count || 0);
     } catch (error) {
       console.error('Error fetching domains:', error);
@@ -106,6 +105,17 @@ export default function ImprovedDomainsPage() {
     }
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleItemsPerPageChange = (items: number) => {
+    setItemsPerPage(items);
+  };
+
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header - Compact on mobile */}
@@ -115,7 +125,7 @@ export default function ImprovedDomainsPage() {
             🎯 Premium Domains
           </h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Dropping in 0-10 days
+            Available for registration
           </p>
         </div>
       </header>
@@ -144,54 +154,38 @@ export default function ImprovedDomainsPage() {
           <div className="text-center py-20">
             <p className="text-gray-500 text-base sm:text-lg">No domains found</p>
             <button
-              onClick={() => setFilters({ status_mode: 'exclude_pending_delete', sort: 'days_until_drop', order: 'asc' })}
+              onClick={() => setFilters({ status_mode: 'pending_delete', sort: 'popularity_score', order: 'desc' })}
               className="mt-4 text-sm sm:text-base text-blue-600 hover:text-blue-700"
             >
               Clear filters
             </button>
           </div>
         ) : (
-          <div className={
-            viewMode === 'card'
-              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4'
-              : 'space-y-2 sm:space-y-3'
-          }>
-            {domains.map((domain) => (
-              <DomainCard
-                key={domain.id}
-                domain={domain}
-                viewMode={viewMode}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Results Count + Pagination */}
-        {!loading && totalCount > 0 && (
-          <div className="mt-6 space-y-4">
-            <p className="text-center text-xs sm:text-sm text-gray-500">
-              Showing {(currentPage - 1) * DOMAINS_PER_PAGE + 1}-{Math.min(currentPage * DOMAINS_PER_PAGE, totalCount)} of {totalCount} domains
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-              >
-                Previous
-              </button>
-              <span className="text-sm text-gray-600 px-3">
-                Page {currentPage} of {Math.max(1, Math.ceil(totalCount / DOMAINS_PER_PAGE))}
-              </span>
-              <button
-                onClick={() => setCurrentPage((page) => Math.min(Math.ceil(totalCount / DOMAINS_PER_PAGE), page + 1))}
-                disabled={currentPage >= Math.ceil(totalCount / DOMAINS_PER_PAGE)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-              >
-                Next
-              </button>
+          <>
+            <div className={
+              viewMode === 'card'
+                ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4'
+                : 'space-y-2 sm:space-y-3'
+            }>
+              {domains.map((domain) => (
+                <DomainCard
+                  key={domain.id}
+                  domain={domain}
+                  viewMode={viewMode}
+                />
+              ))}
             </div>
-          </div>
+
+            {/* Enhanced Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={handleItemsPerPageChange}
+            />
+          </>
         )}
       </div>
     </div>

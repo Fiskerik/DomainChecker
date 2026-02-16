@@ -1,477 +1,378 @@
 /**
- * Advanced Domain Scoring Engine
- * Filters out gibberish domains and ranks quality domains higher
+ * IMPROVED Domain Scoring Engine v2.0 (TypeScript)
+ * 
+ * More intelligent scoring that rewards:
+ * - Real dictionary words
+ * - Geographic names (cities, countries)
+ * - Brand names and concepts
+ * - Pronounceable, meaningful domains
+ * - Professional/business terms
  */
 
 // ============================================================================
-// TYPES
+// TYPES & INTERFACES
 // ============================================================================
 
+export interface ScoreBreakdown {
+  nameQuality: number;
+  meaningfulness: number;
+  trendingBonus: number;
+  technicalQuality: number;
+}
+
 export interface DomainScore {
-  totalScore: number; // 0-100
-  breakdown: {
-    nameQuality: number; // 0-30 (pronounceability, brandability)
-    trendingWords: number; // 0-25 (matches current trends)
-    historicalValue: number; // 0-25 (similar domains sold for high prices)
-    technicalMetrics: number; // 0-20 (length, SEO, character quality)
-  };
-  badges: string[]; // ["🔥 Trending", "💎 Premium", "📈 High Value"]
+  totalScore: number;
+  breakdown: ScoreBreakdown;
+  badges: string[];
   reasoning: string;
 }
 
-export interface DomainMetrics {
-  domain_name: string;
-  tld: string;
-  length: number;
-  hasNumbers: boolean;
-  hasHyphens: boolean;
-  consonantClusters: number;
-  vowelRatio: number;
-  isPronnounceable: boolean;
-  isBrandable: boolean;
-}
-
 // ============================================================================
-// TRENDING WORDS DATABASE
-// Updated monthly via cron job or manually
+// DICTIONARIES & WORD LISTS
 // ============================================================================
 
-export const TRENDING_KEYWORDS_2025 = {
-  // AI & Tech (very hot in 2025)
-  ai: { score: 25, category: 'ai', trend: 'rising' },
-  quantum: { score: 24, category: 'tech', trend: 'rising' },
-  neural: { score: 23, category: 'ai', trend: 'stable' },
-  llm: { score: 22, category: 'ai', trend: 'rising' },
-  agent: { score: 21, category: 'ai', trend: 'rising' },
-  autonomous: { score: 20, category: 'ai', trend: 'rising' },
-  synthetic: { score: 19, category: 'ai', trend: 'stable' },
+// High-value dictionary words (common, brandable, memorable)
+const PREMIUM_WORDS: readonly string[] = [
+  // Business & Professional
+  'pro', 'expert', 'master', 'elite', 'prime', 'best', 'top', 'smart', 'quick', 'fast',
+  'easy', 'simple', 'super', 'mega', 'ultra', 'power', 'plus', 'max', 'hub', 'center',
+  'zone', 'spot', 'place', 'space', 'world', 'global', 'cloud', 'digital', 'online',
+  'web', 'net', 'tech', 'data', 'info', 'media', 'news', 'post', 'blog', 'site',
   
-  // Crypto & Web3
-  defi: { score: 22, category: 'crypto', trend: 'stable' },
-  nft: { score: 18, category: 'crypto', trend: 'declining' },
-  web3: { score: 21, category: 'crypto', trend: 'stable' },
-  blockchain: { score: 19, category: 'crypto', trend: 'stable' },
-  token: { score: 17, category: 'crypto', trend: 'stable' },
+  // Actions (verbs that make sense for domains)
+  'get', 'find', 'buy', 'sell', 'make', 'build', 'create', 'design', 'learn', 'teach',
+  'share', 'connect', 'link', 'join', 'meet', 'chat', 'talk', 'send', 'pay', 'shop',
+  'book', 'plan', 'manage', 'track', 'view', 'watch', 'play', 'stream', 'download',
   
-  // Climate & Sustainability
-  climate: { score: 23, category: 'climate', trend: 'rising' },
-  carbon: { score: 21, category: 'climate', trend: 'rising' },
-  renewable: { score: 20, category: 'climate', trend: 'stable' },
-  solar: { score: 19, category: 'climate', trend: 'stable' },
-  sustainable: { score: 18, category: 'climate', trend: 'stable' },
+  // Valuable industry terms
+  'seo', 'marketing', 'analytics', 'insights', 'metrics', 'stats', 'reports', 'tools',
+  'software', 'platform', 'system', 'solution', 'service', 'network', 'portal',
+  'dashboard', 'console', 'admin', 'studio', 'labs', 'works', 'group', 'team',
   
-  // Health & Wellness
-  longevity: { score: 24, category: 'health', trend: 'rising' },
-  biohack: { score: 22, category: 'health', trend: 'rising' },
-  wellness: { score: 20, category: 'health', trend: 'stable' },
-  mental: { score: 19, category: 'health', trend: 'rising' },
-  therapy: { score: 18, category: 'health', trend: 'stable' },
+  // Emotional/aspirational
+  'love', 'care', 'happy', 'joy', 'dream', 'hope', 'trust', 'true', 'real', 'pure',
+  'fresh', 'new', 'next', 'future', 'smart', 'wise', 'bright', 'clear', 'cool'
+] as const;
+
+// Current trends (2025) - but don't over-weight these
+const TRENDING_KEYWORDS: Readonly<Record<string, number>> = {
+  // AI & Tech (moderate bonus, not excessive)
+  'ai': 10, 'agent': 8, 'gpt': 8, 'llm': 8, 'ml': 6, 'quantum': 8,
+  'automation': 6, 'automate': 6, 'neural': 6,
   
-  // E-commerce & Business
-  shop: { score: 16, category: 'ecommerce', trend: 'stable' },
-  marketplace: { score: 17, category: 'ecommerce', trend: 'stable' },
-  direct: { score: 15, category: 'ecommerce', trend: 'stable' },
-  
-  // Generic valuable terms
-  pro: { score: 18, category: 'generic', trend: 'stable' },
-  hub: { score: 17, category: 'generic', trend: 'stable' },
-  labs: { score: 19, category: 'generic', trend: 'stable' },
-  studio: { score: 16, category: 'generic', trend: 'stable' },
-  academy: { score: 15, category: 'generic', trend: 'stable' },
+  // Other trends
+  'climate': 8, 'carbon': 6, 'solar': 6, 'green': 6, 'eco': 6,
+  'crypto': 6, 'blockchain': 6, 'web3': 6, 'defi': 6, 'nft': 4,
+  'wellness': 6, 'mental': 6, 'therapy': 6, 'coach': 6
 } as const;
 
-// Common English words that make domains pronounceable/brandable
-export const PRONOUNCEABLE_PATTERNS = [
-  /^[a-z]{3,}$/i, // No numbers
-  /^[bcdfghjklmnpqrstvwxyz]*[aeiou][bcdfghjklmnpqrstvwxyz]*[aeiou]/i, // Vowel pattern
-];
+// Major world cities (high value for geo-targeting)
+const MAJOR_CITIES: readonly string[] = [
+  'london', 'paris', 'tokyo', 'sydney', 'newyork', 'losangeles', 'chicago', 'miami',
+  'berlin', 'madrid', 'rome', 'milan', 'barcelona', 'amsterdam', 'dublin', 'edinburgh',
+  'singapore', 'hongkong', 'dubai', 'bangkok', 'mumbai', 'delhi', 'beijing', 'shanghai',
+  'toronto', 'vancouver', 'montreal', 'seattle', 'boston', 'austin', 'denver', 'portland',
+  'stockholm', 'copenhagen', 'oslo', 'helsinki', 'zurich', 'geneva', 'vienna', 'prague'
+] as const;
 
-// Gibberish detection patterns
-export const GIBBERISH_PATTERNS = [
-  /^[bcdfghjklmnpqrstvwxyz]{5,}/i, // 5+ consonants in a row
-  /[xqz]{2,}/i, // Repeated rare letters
-  /^[0-9]+[a-z]+$/i, // Numbers then letters (usually spam)
-  /^[a-z]+[0-9]+$/i, // Letters then numbers (usually spam)
-];
+// Countries (high value)
+const COUNTRIES: readonly string[] = [
+  'usa', 'uk', 'canada', 'australia', 'germany', 'france', 'spain', 'italy', 'japan',
+  'china', 'india', 'brazil', 'mexico', 'russia', 'korea', 'sweden', 'norway', 'denmark',
+  'netherlands', 'belgium', 'switzerland', 'austria', 'poland', 'ireland', 'singapore',
+  'thailand', 'vietnam', 'indonesia', 'malaysia', 'philippines'
+] as const;
 
-// ============================================================================
-// HISTORICAL PRICING DATA
-// This would ideally come from NameBio API
-// ============================================================================
+// Known brands/concepts (don't include trademarked terms, but generic concepts)
+const VALUABLE_CONCEPTS: readonly string[] = [
+  'knowledge', 'wisdom', 'science', 'research', 'study', 'guide', 'academy', 'university',
+  'school', 'college', 'course', 'training', 'workshop', 'seminar', 'conference',
+  'market', 'marketplace', 'store', 'shop', 'mall', 'boutique', 'outlet', 'deals',
+  'travel', 'hotel', 'booking', 'flight', 'vacation', 'tour', 'trip', 'journey',
+  'health', 'fitness', 'nutrition', 'diet', 'exercise', 'workout', 'yoga', 'medical',
+  'finance', 'money', 'invest', 'trading', 'stock', 'fund', 'bank', 'credit', 'loan',
+  'insurance', 'property', 'real', 'estate', 'home', 'house', 'apartment', 'rent'
+] as const;
 
-export interface HistoricalSale {
-  domain: string;
-  price: number;
-  date: string;
-  marketplace: string;
-}
-
-// Sample data - in production, fetch from NameBio API
-export const HIGH_VALUE_PATTERNS = {
-  // Short domains (3-5 chars)
-  shortDomains: {
-    '.com': { 3: 50000, 4: 10000, 5: 3000 },
-    '.io': { 3: 15000, 4: 5000, 5: 1500 },
-    '.ai': { 3: 25000, 4: 8000, 5: 2000 },
-  },
-  
-  // Keyword combinations that sold well historically
-  valuablePatterns: [
-    { pattern: /ai$/i, avgPrice: 8000, category: 'ai-suffix' },
-    { pattern: /^get[a-z]+/i, avgPrice: 5000, category: 'get-prefix' },
-    { pattern: /labs$/i, avgPrice: 4500, category: 'labs-suffix' },
-    { pattern: /hub$/i, avgPrice: 4000, category: 'hub-suffix' },
-    { pattern: /pro$/i, avgPrice: 3500, category: 'pro-suffix' },
-  ],
-};
-
-// ============================================================================
-// SCORING FUNCTIONS
-// ============================================================================
-
-/**
- * Calculate technical quality metrics
- */
-export function calculateDomainMetrics(domainName: string): DomainMetrics {
-  const nameWithoutTld = domainName.split('.')[0].toLowerCase();
-  const length = nameWithoutTld.length;
-  
-  // Check for numbers and hyphens
-  const hasNumbers = /\d/.test(nameWithoutTld);
-  const hasHyphens = /-/.test(nameWithoutTld);
-  
-  // Count consonant clusters (bad for pronunciation)
-  const consonantClusters = (nameWithoutTld.match(/[bcdfghjklmnpqrstvwxyz]{3,}/gi) || []).length;
-  
-  // Calculate vowel ratio
-  const vowels = (nameWithoutTld.match(/[aeiou]/gi) || []).length;
-  const vowelRatio = vowels / length;
-  
-  // Pronounceability check
-  const isPronnounceable = 
-    !hasNumbers &&
-    !hasHyphens &&
-    consonantClusters === 0 &&
-    vowelRatio >= 0.25 &&
-    vowelRatio <= 0.6;
-  
-  // Brandability (short, pronounceable, no weird chars)
-  const isBrandable = 
-    length >= 4 &&
-    length <= 12 &&
-    isPronnounceable &&
-    !/[0-9\-_]/.test(nameWithoutTld);
-  
-  return {
-    domain_name: domainName,
-    tld: domainName.split('.')[1] || 'com',
-    length,
-    hasNumbers,
-    hasHyphens,
-    consonantClusters,
-    vowelRatio,
-    isPronnounceable,
-    isBrandable,
-  };
-}
-
-/**
- * Score based on name quality (pronounceability, brandability)
- * Max: 30 points
- */
-export function scoreNameQuality(metrics: DomainMetrics): number {
-  let score = 0;
-  const name = metrics.domain_name.split('.')[0].toLowerCase();
-  
-  // Check if it's gibberish
-  for (const pattern of GIBBERISH_PATTERNS) {
-    if (pattern.test(name)) {
-      return 0; // Instant reject
-    }
-  }
-  
-  // Length scoring (sweet spot: 5-8 chars)
-  if (metrics.length <= 4) score += 10; // Ultra premium
-  else if (metrics.length <= 8) score += 8;
-  else if (metrics.length <= 12) score += 5;
-  else score += 2;
-  
-  // Pronounceability
-  if (metrics.isPronnounceable) score += 10;
-  else if (metrics.consonantClusters === 0) score += 5;
-  
-  // Brandability
-  if (metrics.isBrandable) score += 10;
-  
-  // Penalties
-  if (metrics.hasNumbers) score -= 5;
-  if (metrics.hasHyphens) score -= 5;
-  if (metrics.consonantClusters > 0) score -= metrics.consonantClusters * 3;
-  
-  return Math.max(0, Math.min(30, score));
-}
-
-/**
- * Score based on trending words
- * Max: 25 points
- */
-export function scoreTrendingWords(domainName: string): number {
-  const name = domainName.split('.')[0].toLowerCase();
-  let score = 0;
-  const matches: string[] = [];
-  
-  // Check for exact keyword matches
-  for (const [keyword, data] of Object.entries(TRENDING_KEYWORDS_2025)) {
-    if (name.includes(keyword)) {
-      score += data.score;
-      matches.push(keyword);
-    }
-  }
-  
-  // Bonus for multiple trending words
-  if (matches.length >= 2) {
-    score += 5;
-  }
-  
-  return Math.min(25, score);
-}
-
-/**
- * Score based on historical sales data
- * Max: 25 points
- */
-export function scoreHistoricalValue(domainName: string, tld: string): number {
-  const name = domainName.split('.')[0].toLowerCase();
-  const length = name.length;
-  let score = 0;
-  
-  // Short domain premium
-  const shortDomainValues = HIGH_VALUE_PATTERNS.shortDomains[`.${tld}` as keyof typeof HIGH_VALUE_PATTERNS.shortDomains];
-  if (shortDomainValues && length <= 5) {
-    const value = shortDomainValues[length as keyof typeof shortDomainValues];
-    if (value) {
-      // Convert price to score (logarithmic scale)
-      score += Math.min(15, Math.log10(value) * 3);
-    }
-  }
-  
-  // Pattern matching
-  for (const { pattern, avgPrice } of HIGH_VALUE_PATTERNS.valuablePatterns) {
-    if (pattern.test(name)) {
-      score += Math.min(10, Math.log10(avgPrice) * 2.5);
-      break; // Only count once
-    }
-  }
-  
-  return Math.min(25, Math.round(score));
-}
-
-/**
- * Score technical SEO & other metrics
- * Max: 20 points
- */
-export function scoreTechnicalMetrics(domainName: string, tld: string): number {
-  const name = domainName.split('.')[0].toLowerCase();
-  let score = 0;
-  
-  // TLD premium
-  const tldScores: Record<string, number> = {
-    com: 10,
-    io: 8,
-    ai: 9,
-    app: 7,
-    dev: 7,
-    co: 6,
-    net: 5,
-    org: 5,
-  };
-  score += tldScores[tld] || 3;
-  
-  // Dictionary word bonus (simple check)
-  const commonWords = ['get', 'my', 'the', 'go', 'be', 'use', 'find', 'make', 'build', 'learn'];
-  if (commonWords.some(word => name.startsWith(word) || name.endsWith(word))) {
-    score += 5;
-  }
-  
-  // No special characters
-  if (!/[^a-z]/.test(name)) {
-    score += 5;
-  }
-  
-  return Math.min(20, score);
-}
-
-/**
- * Master scoring function
- */
-export function calculateDomainScore(domainName: string): DomainScore {
-  const metrics = calculateDomainMetrics(domainName);
-  const tld = metrics.tld;
-  
-  // Calculate individual scores
-  const nameQuality = scoreNameQuality(metrics);
-  const trendingWords = scoreTrendingWords(domainName);
-  const historicalValue = scoreHistoricalValue(domainName, tld);
-  const technicalMetrics = scoreTechnicalMetrics(domainName, tld);
-  
-  const totalScore = nameQuality + trendingWords + historicalValue + technicalMetrics;
-  
-  // Generate badges
-  const badges: string[] = [];
-  if (trendingWords >= 20) badges.push('🔥 Trending');
-  if (nameQuality >= 25) badges.push('💎 Premium');
-  if (historicalValue >= 20) badges.push('📈 High Value');
-  if (metrics.length <= 5) badges.push('⚡ Short');
-  if (metrics.isBrandable) badges.push('🎯 Brandable');
-  
-  // Generate reasoning
-  let reasoning = '';
-  if (totalScore >= 80) {
-    reasoning = 'Exceptional domain with high marketability';
-  } else if (totalScore >= 60) {
-    reasoning = 'Strong domain with good potential';
-  } else if (totalScore >= 40) {
-    reasoning = 'Decent domain worth considering';
-  } else if (totalScore >= 20) {
-    reasoning = 'Average domain with limited appeal';
-  } else {
-    reasoning = 'Low quality - likely gibberish or poor brandability';
-  }
-  
-  return {
-    totalScore: Math.round(totalScore),
-    breakdown: {
-      nameQuality: Math.round(nameQuality),
-      trendingWords: Math.round(trendingWords),
-      historicalValue: Math.round(historicalValue),
-      technicalMetrics: Math.round(technicalMetrics),
-    },
-    badges,
-    reasoning,
-  };
-}
-
-// ============================================================================
-// INTEGRATION WITH NAMEBIO API (OPTIONAL)
-// ============================================================================
-
-/**
- * Fetch similar domain sales from NameBio
- * Requires API key: https://namebio.com/api
- */
-export async function fetchHistoricalSales(
-  domainName: string,
-  apiKey?: string
-): Promise<HistoricalSale[]> {
-  if (!apiKey) {
-    console.warn('NameBio API key not provided, using estimated values');
-    return [];
-  }
-  
-  try {
-    const name = domainName.split('.')[0];
-    const response = await fetch(
-      `https://namebio.com/api/json.php?key=${apiKey}&search=${encodeURIComponent(name)}&mode=domain`
-    );
-    
-    const data = await response.json();
-    
-    return data.results.map((result: any) => ({
-      domain: result.domain,
-      price: parseInt(result.price),
-      date: result.date,
-      marketplace: result.marketplace,
-    }));
-  } catch (error) {
-    console.error('Error fetching NameBio data:', error);
-    return [];
-  }
-}
-
-/**
- * Enhanced scoring with real historical data
- */
-export async function calculateEnhancedScore(
-  domainName: string,
-  nameBioApiKey?: string
-): Promise<DomainScore> {
-  const baseScore = calculateDomainScore(domainName);
-  
-  // Fetch historical sales
-  const sales = await fetchHistoricalSales(domainName, nameBioApiKey);
-  
-  if (sales.length > 0) {
-    // Calculate average sale price of similar domains
-    const avgPrice = sales.reduce((sum, sale) => sum + sale.price, 0) / sales.length;
-    
-    // Boost historical value score based on real data
-    const realDataBoost = Math.min(10, Math.log10(avgPrice) * 2);
-    baseScore.breakdown.historicalValue = Math.min(
-      25,
-      baseScore.breakdown.historicalValue + realDataBoost
-    );
-    
-    baseScore.totalScore = Object.values(baseScore.breakdown).reduce((a, b) => a + b, 0);
-    
-    if (avgPrice > 10000) {
-      baseScore.badges.push('💰 High Historical Value');
-    }
-  }
-  
-  return baseScore;
-}
+const PREFERRED_TLDS: Readonly<Record<string, number>> = {
+  'com': 15,
+  'io': 10,
+  'ai': 10,
+  'co': 8,
+  'net': 7,
+  'org': 7,
+  'app': 8,
+  'dev': 8
+} as const;
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
- * Filter out gibberish domains
+ * Check if string contains a dictionary word
  */
-export function isGibberish(domainName: string): boolean {
-  const score = calculateDomainScore(domainName);
-  return score.totalScore < 15 || score.breakdown.nameQuality === 0;
+function containsWord(name: string, wordList: readonly string[]): boolean {
+  return wordList.some((word: string) => {
+    if (name === word) return true;
+    if (name.startsWith(word) || name.endsWith(word)) return true;
+    return false;
+  });
 }
 
 /**
- * Get quality tier
+ * Check if domain is pronounceable (has good vowel/consonant distribution)
  */
-export function getQualityTier(score: number): 'premium' | 'good' | 'average' | 'poor' {
-  if (score >= 75) return 'premium';
-  if (score >= 50) return 'good';
-  if (score >= 25) return 'average';
-  return 'poor';
-}
-
-// ============================================================================
-// BATCH PROCESSING
-// ============================================================================
-
-/**
- * Score multiple domains at once
- */
-export function scoreBatch(domains: string[]): Map<string, DomainScore> {
-  const results = new Map<string, DomainScore>();
+function isPronounceableWord(name: string): boolean {
+  // Must have at least one vowel
+  if (!/[aeiou]/i.test(name)) return false;
   
-  for (const domain of domains) {
-    results.set(domain, calculateDomainScore(domain));
+  // Calculate vowel ratio
+  const vowels = (name.match(/[aeiou]/gi) || []).length;
+  const ratio = vowels / name.length;
+  
+  // Good ratio is between 25% and 60%
+  if (ratio < 0.25 || ratio > 0.6) return false;
+  
+  // No more than 3 consonants in a row
+  if (/[bcdfghjklmnpqrstvwxyz]{4,}/i.test(name)) return false;
+  
+  // No more than 3 same letters in a row
+  if (/(.)\1{3,}/.test(name)) return false;
+  
+  return true;
+}
+
+/**
+ * Check if domain contains meaningful parts
+ */
+function hasMeaningfulParts(name: string): boolean {
+  // Split on common separators (even if not present, this helps)
+  const parts = name.split(/[-_]/).filter((p: string) => p.length > 0);
+  
+  // Check each part
+  for (const part of parts) {
+    if (part.length >= 3) {
+      // Check if it's a known word
+      if (containsWord(part, PREMIUM_WORDS)) return true;
+      if (containsWord(part, MAJOR_CITIES)) return true;
+      if (containsWord(part, COUNTRIES)) return true;
+      if (containsWord(part, VALUABLE_CONCEPTS)) return true;
+    }
   }
   
-  return results;
+  return false;
+}
+
+// ============================================================================
+// SCORING ALGORITHM
+// ============================================================================
+
+/**
+ * Calculate comprehensive domain score (0-100)
+ */
+export function calculateDomainScore(domainName: string): DomainScore {
+  const [name, tld] = domainName.toLowerCase().split('.');
+  if (!name) {
+    return {
+      totalScore: 0,
+      breakdown: {
+        nameQuality: 0,
+        meaningfulness: 0,
+        trendingBonus: 0,
+        technicalQuality: 0
+      },
+      badges: [],
+      reasoning: 'Invalid domain name'
+    };
+  }
+  
+  const breakdown: ScoreBreakdown = {
+    nameQuality: 0,
+    meaningfulness: 0,
+    trendingBonus: 0,
+    technicalQuality: 0
+  };
+  
+  // ========================================================================
+  // 1. NAME QUALITY (0-35 points) - Base quality
+  // ========================================================================
+  
+  // Length scoring (sweet spots)
+  if (name.length >= 3 && name.length <= 6) {
+    breakdown.nameQuality += 20; // Ultra premium short domains
+  } else if (name.length >= 7 && name.length <= 10) {
+    breakdown.nameQuality += 15; // Excellent length
+  } else if (name.length >= 11 && name.length <= 15) {
+    breakdown.nameQuality += 10; // Good length
+  } else if (name.length >= 16 && name.length <= 20) {
+    breakdown.nameQuality += 5; // Acceptable
+  } else {
+    breakdown.nameQuality -= 10; // Too short or too long
+  }
+  
+  // Pronounceability bonus
+  if (isPronounceableWord(name)) {
+    breakdown.nameQuality += 15;
+  } else {
+    breakdown.nameQuality += 5; // Small bonus for trying
+  }
+  
+  // Clean characters (no numbers, hyphens)
+  if (!/[0-9]/.test(name)) {
+    breakdown.nameQuality += 5;
+  } else {
+    breakdown.nameQuality -= 10; // Penalty for numbers
+  }
+  
+  if (!/-/.test(name)) {
+    breakdown.nameQuality += 5;
+  } else {
+    breakdown.nameQuality -= 5; // Small penalty for hyphens
+  }
+  
+  // Cap at 35
+  breakdown.nameQuality = Math.max(0, Math.min(35, breakdown.nameQuality));
+  
+  // ========================================================================
+  // 2. MEANINGFULNESS (0-35 points) - Real words, concepts, places
+  // ========================================================================
+  
+  // Premium dictionary words
+  if (containsWord(name, PREMIUM_WORDS)) {
+    breakdown.meaningfulness += 15;
+  }
+  
+  // Geographic names (cities, countries)
+  if (containsWord(name, MAJOR_CITIES)) {
+    breakdown.meaningfulness += 12;
+  }
+  if (containsWord(name, COUNTRIES)) {
+    breakdown.meaningfulness += 10;
+  }
+  
+  // Valuable concepts
+  if (containsWord(name, VALUABLE_CONCEPTS)) {
+    breakdown.meaningfulness += 10;
+  }
+  
+  // Has meaningful parts (even if combined)
+  if (hasMeaningfulParts(name)) {
+    breakdown.meaningfulness += 8;
+  }
+  
+  // Brandability bonus (short + pronounceable + no numbers)
+  if (name.length >= 5 && name.length <= 10 && 
+      isPronounceableWord(name) && !/[0-9-]/.test(name)) {
+    breakdown.meaningfulness += 10;
+  }
+  
+  // Cap at 35
+  breakdown.meaningfulness = Math.max(0, Math.min(35, breakdown.meaningfulness));
+  
+  // ========================================================================
+  // 3. TRENDING BONUS (0-15 points) - Current market trends
+  // ========================================================================
+  
+  // Check for trending keywords (moderate bonus)
+  for (const [keyword, points] of Object.entries(TRENDING_KEYWORDS)) {
+    if (name.includes(keyword)) {
+      // Only count the keyword if it's a full word, not partial
+      // "thai" should NOT trigger "ai"
+      const regex = new RegExp(`\\b${keyword}\\b|^${keyword}|${keyword}$`);
+      if (regex.test(name)) {
+        breakdown.trendingBonus += points;
+      }
+    }
+  }
+  
+  // Cap at 15 (don't over-weight trends)
+  breakdown.trendingBonus = Math.min(15, breakdown.trendingBonus);
+  
+  // ========================================================================
+  // 4. TECHNICAL QUALITY (0-15 points) - TLD, SEO, etc.
+  // ========================================================================
+  
+  // TLD quality
+  breakdown.technicalQuality += PREFERRED_TLDS[tld] || 3;
+  
+  // Cap at 15
+  breakdown.technicalQuality = Math.min(15, breakdown.technicalQuality);
+  
+  // ========================================================================
+  // CALCULATE TOTAL
+  // ========================================================================
+  
+  const totalScore = Math.round(
+    breakdown.nameQuality + 
+    breakdown.meaningfulness + 
+    breakdown.trendingBonus + 
+    breakdown.technicalQuality
+  );
+  
+  // Generate badges
+  const badges: string[] = [];
+  if (totalScore >= 85) badges.push('💎 Premium');
+  if (totalScore >= 75) badges.push('⭐ Excellent');
+  if (totalScore >= 65) badges.push('✨ Very Good');
+  if (name.length <= 6) badges.push('⚡ Short');
+  if (containsWord(name, MAJOR_CITIES) || containsWord(name, COUNTRIES)) {
+    badges.push('🌍 Geographic');
+  }
+  if (breakdown.trendingBonus >= 8) badges.push('🔥 Trending');
+  
+  // Reasoning
+  let reasoning = '';
+  if (totalScore >= 80) reasoning = 'Exceptional domain with high commercial value';
+  else if (totalScore >= 65) reasoning = 'Strong domain with good market potential';
+  else if (totalScore >= 50) reasoning = 'Solid domain worth considering';
+  else if (totalScore >= 35) reasoning = 'Average domain with limited appeal';
+  else reasoning = 'Low quality - limited commercial value';
+  
+  return {
+    totalScore: Math.min(100, Math.max(0, totalScore)),
+    breakdown,
+    badges,
+    reasoning
+  };
 }
 
 /**
- * Filter and sort domains by score
+ * Test the scoring on example domains
  */
-export function filterAndSort(
-  domains: string[],
-  minScore: number = 30
-): Array<{ domain: string; score: DomainScore }> {
-  return domains
-    .map(domain => ({
-      domain,
-      score: calculateDomainScore(domain),
-    }))
-    .filter(item => item.score.totalScore >= minScore)
-    .sort((a, b) => b.score.totalScore - a.score.totalScore);
+export function testScoring(): void {
+  const testDomains = [
+    'knowmyseo.com',      // Should score high
+    'london.com',         // Should score very high
+    'getpaid.com',        // Should score high
+    'smartai.com',        // Should score high
+    'thai.com',           // Should NOT get AI bonus
+    'xyzqpr.com',         // Should score low (gibberish)
+    '12345.com',          // Should score low (numbers)
+    'quick-tools.com',    // Should score decent
+    'travelbooking.com',  // Should score high
+  ];
+  
+  console.log('='.repeat(80));
+  console.log('DOMAIN SCORING TESTS');
+  console.log('='.repeat(80));
+  
+  for (const domain of testDomains) {
+    const score = calculateDomainScore(domain);
+    console.log(`\n${domain}`);
+    console.log(`  Score: ${score.totalScore}/100`);
+    console.log(`  Breakdown: Quality=${score.breakdown.nameQuality}, ` +
+                `Meaning=${score.breakdown.meaningfulness}, ` +
+                `Trending=${score.breakdown.trendingBonus}, ` +
+                `Tech=${score.breakdown.technicalQuality}`);
+    console.log(`  ${score.reasoning}`);
+    if (score.badges.length > 0) {
+      console.log(`  Badges: ${score.badges.join(' ')}`);
+    }
+  }
+  
+  console.log('\n' + '='.repeat(80));
 }
+
+// Export for use in ingestion scripts
+export default calculateDomainScore;
