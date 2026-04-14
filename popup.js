@@ -14,6 +14,7 @@ const stageMap = Object.fromEntries(STAGES.map(s => [s.id, s]));
 
 let allThreads = [];
 let currentFilter = 'active';
+let currentInboxStageFilter = 'all';
 
 // ── Load Data ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ function renderAll() {
   updateStats();
   checkOverdue();
   renderList();
+  syncStageFilterUI();
 }
 
 function filterThreads(filter) {
@@ -200,6 +202,35 @@ document.getElementById('pp-open-kanban').addEventListener('click', () => {
   const kanbanUrl = chrome.runtime.getURL('kanban.html');
   chrome.tabs.create({ url: kanbanUrl });
 });
+
+document.getElementById('pp-stage-filter').addEventListener('change', (e) => {
+  currentInboxStageFilter = e.target.value || 'all';
+  chrome.storage.local.set({ popupInboxStageFilter: currentInboxStageFilter });
+  applyInboxStageFilter(currentInboxStageFilter);
+});
+
+function syncStageFilterUI() {
+  chrome.storage.local.get(['popupInboxStageFilter'], (result) => {
+    currentInboxStageFilter = result.popupInboxStageFilter || 'all';
+    const select = document.getElementById('pp-stage-filter');
+    if (select) select.value = currentInboxStageFilter;
+    applyInboxStageFilter(currentInboxStageFilter);
+  });
+}
+
+function applyInboxStageFilter(stageId) {
+  console.log('[Pipeline CRM] Popup apply inbox stage filter:', stageId);
+  chrome.runtime.sendMessage({
+    type: 'APPLY_INBOX_FILTER',
+    stageId
+  }, (resp) => {
+    if (chrome.runtime.lastError) {
+      console.log('[Pipeline CRM] Failed to apply inbox filter:', chrome.runtime.lastError.message);
+      return;
+    }
+    console.log('[Pipeline CRM] Inbox filter result:', resp);
+  });
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 loadData();

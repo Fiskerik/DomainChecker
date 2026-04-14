@@ -28,6 +28,18 @@ function openOrFocusLinkedIn(url = 'https://www.linkedin.com/messaging/') {
   });
 }
 
+function findLinkedInMessagingTab(callback) {
+  chrome.tabs.query({ url: 'https://www.linkedin.com/messaging/*' }, (tabs) => {
+    if (chrome.runtime.lastError) {
+      console.log('[Pipeline CRM] Could not query messaging tabs:', chrome.runtime.lastError.message);
+      callback(null);
+      return;
+    }
+    const tab = tabs.find((item) => item && item.id);
+    callback(tab || null);
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'OPEN_KANBAN') {
     chrome.tabs.create({ url: 'kanban.html' });
@@ -37,13 +49,34 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ ok: true });
   }
   if (msg.type === 'OPEN_LINKEDIN_THREAD') {
-    const threadId = msg.threadId || '';
-    const cleanThreadId = String(threadId).replace(/[^a-zA-Z0-9_-]/g, '');
-    const targetUrl = cleanThreadId
-      ? `https://www.linkedin.com/messaging/thread/${cleanThreadId}/`
+    const threadId = String(msg.threadId || '').trim();
+    const targetUrl = threadId
+      ? `https://www.linkedin.com/messaging/thread/${threadId}/`
       : 'https://www.linkedin.com/messaging/';
+    console.log('[Pipeline CRM] OPEN_LINKEDIN_THREAD', { threadId, targetUrl });
     openOrFocusLinkedIn(targetUrl);
     sendResponse({ ok: true });
+  }
+  if (msg.type === 'APPLY_INBOX_FILTER') {
+    findLinkedInMessagingTab((tab) => {
+      if (!tab?.id) {
+        console.log('[Pipeline CRM] No LinkedIn messaging tab found for inbox filter');
+        sendResponse({ ok: false, reason: 'tab_not_found' });
+        return;
+      }
+
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'APPLY_INBOX_FILTER',
+        stageId: msg.stageId || 'all'
+      }, (resp) => {
+        if (chrome.runtime.lastError) {
+          console.log('[Pipeline CRM] Could not send inbox filter message:', chrome.runtime.lastError.message);
+          sendResponse({ ok: false, reason: 'send_failed' });
+          return;
+        }
+        sendResponse({ ok: true, response: resp || null });
+      });
+    });
   }
   if (msg.type === 'SCHEDULE_ALARM') {
     chrome.alarms.create(msg.alarmName, { when: msg.alarmTime });

@@ -60,6 +60,33 @@ body {
   flex-wrap: wrap;
 }
 
+#pp-stage-filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #E8EDF2;
+  background: #FCFDFF;
+}
+
+#pp-stage-filter-row label {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+
+#pp-stage-filter {
+  min-width: 160px;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  background: #fff;
+  color: #1E293B;
+  font-size: 11px;
+  padding: 5px 8px;
+  font-family: inherit;
+}
+
 .pp-filter {
   font-size: 11px;
   padding: 4px 10px;
