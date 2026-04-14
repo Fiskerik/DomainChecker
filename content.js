@@ -55,9 +55,13 @@ function applyThreadNameColor(link, stageId) {
     '.msg-conversation-card__participant-names .truncate',
     '.msg-conversation-card__title-row h3',
     '.msg-conversation-card__title-row h3 .display-flex',
+    '.msg-conversation-card__title-row h3',
     '.msg-conversation-card__title-row h3 span',
+    '.msg-conversation-card__title-row .msg-conversation-card__participant-names',
+    '.msg-conversation-card__title-row .msg-conversation-card__participant-names *',
     '.msg-conversation-listitem__participant-names *',
-    '.msg-conversation-card__participant-names *'
+    '.msg-conversation-card__participant-names *',
+    'span[dir="ltr"]'
   ];
 
   nameSelectors.forEach((selector) => {
@@ -79,6 +83,11 @@ function init() {
   if (!document.getElementById('plcrm-sidebar')) {
     injectSidebar();
   }
+  chrome.storage.local.get(['popupInboxStageFilter'], (result) => {
+    inboxFilterStage = result.popupInboxStageFilter || 'all';
+    console.log('[Pipeline CRM] Loaded inbox filter from storage on init:', inboxFilterStage);
+    updateInboxUI();
+  });
   checkCurrentThread();
   scheduleInboxUpdate();
 
@@ -182,6 +191,25 @@ function rowNameFromThreadId(threadId) {
   return '';
 }
 
+function getSelectedInboxThreadId() {
+  const selectedSelectors = [
+    'a[href*="/messaging/thread/"][aria-current="page"]',
+    '[aria-selected="true"] a[href*="/messaging/thread/"]',
+    'li.msg-conversation-listitem--is-active a[href*="/messaging/thread/"]',
+    'li.msg-conversation-listitem--selected a[href*="/messaging/thread/"]',
+    '.msg-conversation-listitem--is-focused a[href*="/messaging/thread/"]'
+  ];
+
+  for (const selector of selectedSelectors) {
+    const selectedLink = document.querySelector(selector);
+    const href = selectedLink?.href || '';
+    const match = href.match(/\/messaging\/thread\/([^/?#]+)/);
+    if (match?.[1]) return match[1];
+  }
+
+  return null;
+}
+
 function shouldShowThreadForFilter(stageId) {
   if (inboxFilterStage === 'all') return true;
   if (inboxFilterStage === 'unlabeled') return !stageId || stageId === 'new';
@@ -195,8 +223,12 @@ function getThreadId() {
   return match ? match[1] : null;
 }
 
+function getActiveThreadId() {
+  return getThreadId() || getSelectedInboxThreadId();
+}
+
 function getContactName() {
-  const fromSelectedRow = rowNameFromThreadId(getThreadId());
+  const fromSelectedRow = rowNameFromThreadId(getActiveThreadId());
   if (fromSelectedRow) return fromSelectedRow;
 
   const selectors = [
@@ -489,8 +521,9 @@ function updateFollowupHint(dateStr) {
 }
 
 function checkCurrentThread() {
-  const id = getThreadId();
+  const id = getActiveThreadId();
   if (id && id !== currentThreadId) {
+    console.log('[Pipeline CRM] Active thread changed:', { previous: currentThreadId, next: id });
     currentThreadId = id;
     loadAndPopulateSidebar(id);
     updateContactHeader(getContactName(), getContactSubtitle());
@@ -531,13 +564,53 @@ function resetSidebar() {
   updateLinkedInHeaderBackground('new');
 }
 
+function selectThreadInOpenInbox(threadId) {
+  if (!threadId) return false;
+  const link = document.querySelector(`a[href*="/messaging/thread/${threadId}"]`);
+  if (!link) {
+    console.log('[Pipeline CRM] Could not find row to select thread in open inbox:', threadId);
+    return false;
+  }
+
+  link.click();
+  const listItem = link.closest('li');
+  if (listItem && typeof listItem.scrollIntoView === 'function') {
+    listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  console.log('[Pipeline CRM] Selected thread directly in existing inbox tab:', threadId);
+  return true;
+}
+
+function openSidebarPanel() {
+  const sidebar = document.getElementById('plcrm-sidebar');
+  if (!sidebar) return false;
+  sidebar.classList.add('plcrm-open');
+  return true;
+}
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== 'APPLY_INBOX_FILTER') return;
-  inboxFilterStage = msg.stageId || 'all';
-  console.log('[Pipeline CRM] Applying inbox stage filter:', inboxFilterStage);
-  updateInboxUI();
-  sendResponse({ ok: true, stageId: inboxFilterStage });
+  if (msg?.type === 'APPLY_INBOX_FILTER') {
+    inboxFilterStage = msg.stageId || 'all';
+    console.log('[Pipeline CRM] Applying inbox stage filter:', inboxFilterStage);
+    updateInboxUI();
+    sendResponse({ ok: true, stageId: inboxFilterStage });
+    return;
+  }
+
+  if (msg?.type === 'SELECT_LINKEDIN_THREAD') {
+    const ok = selectThreadInOpenInbox(String(msg.threadId || '').trim());
+    if (ok) {
+      currentThreadId = msg.threadId;
+      checkCurrentThread();
+    }
+    sendResponse({ ok });
+    return;
+  }
+
+  if (msg?.type === 'OPEN_SIDEBAR_PANEL') {
+    const ok = openSidebarPanel();
+    sendResponse({ ok });
+  }
 });
 
 init();

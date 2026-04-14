@@ -198,6 +198,16 @@ document.getElementById('pp-open-li').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'OPEN_LINKEDIN' });
 });
 
+document.getElementById('pp-open-sidebar').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_PANEL' }, (resp) => {
+    if (chrome.runtime.lastError) {
+      console.log('[Pipeline CRM] Failed to open side panel:', chrome.runtime.lastError.message);
+      return;
+    }
+    console.log('[Pipeline CRM] Open side panel response:', resp);
+  });
+});
+
 document.getElementById('pp-open-kanban').addEventListener('click', () => {
   const kanbanUrl = chrome.runtime.getURL('kanban.html');
   chrome.tabs.create({ url: kanbanUrl });
