@@ -18,6 +18,29 @@ let inboxUpdateTimer  = null;
 
 const stageMap = Object.fromEntries(STAGES.map(s => [s.id, s]));
 
+function formatStageLabel(stageId) {
+  return stageMap[stageId]?.label || stageId || 'Unknown';
+}
+
+function sanitizeContactName(rawName) {
+  if (!rawName) return '';
+  const cleaned = rawName
+    .replace(/^\(\s*\d+\s*\)\s*/u, '')
+    .replace(/^\([^)]*\)\s*/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return '';
+
+  const lower = cleaned.toLowerCase();
+  const blockedNames = ['messaging', 'linkedin', 'inbox'];
+  if (blockedNames.some(term => lower === term || lower.includes(`${term} |`) || lower.includes(`| ${term}`))) {
+    return '';
+  }
+
+  return cleaned;
+}
+
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 function init() {
@@ -62,10 +85,15 @@ function updateInboxUI() {
       listItem.querySelectorAll('.plcrm-inbox-dot').forEach(d => d.remove());
       
       const titleRow = link.querySelector('.msg-conversation-card__row.msg-conversation-card__title-row');
+      const nameEl = link.querySelector('.msg-conversation-listitem__participant-names, .msg-conversation-card__participant-names, .t-16, .t-14');
       if (titleRow) {
         titleRow.style.backgroundColor = 'transparent';
         titleRow.style.border = 'none';
         titleRow.style.padding = '0';
+      }
+      if (nameEl) {
+        nameEl.style.color = '';
+        nameEl.style.fontWeight = '';
       }
 
       if (!data || !data.stage) return;
@@ -95,6 +123,11 @@ function updateInboxUI() {
         titleRow.style.border = `1px solid ${stage.color}`;
         titleRow.style.margin = '2px 0';
       }
+
+      if (nameEl && data.stage !== 'new') {
+        nameEl.style.color = stage.color;
+        nameEl.style.fontWeight = '600';
+      }
     });
   });
 }
@@ -107,13 +140,23 @@ function getThreadId() {
 }
 
 function getContactName() {
-  const titleMatch = document.title.match(/^(.+?)\s*[\|\-]\s*(LinkedIn|Messaging)/i);
-  if (titleMatch) return titleMatch[1].trim();
-  const selectors = ['.msg-entity-lockup__entity-title', '.msg-thread__link-to-profile', 'h2.t-16'];
+  const selectors = [
+    '.msg-entity-lockup__entity-title',
+    '.msg-thread__link-to-profile',
+    '.msg-thread__topcard .t-16',
+    'h2.t-16'
+  ];
+
   for (const sel of selectors) {
     const el = document.querySelector(sel);
-    if (el?.textContent?.trim()) return el.textContent.trim();
+    const cleaned = sanitizeContactName(el?.textContent || '');
+    if (cleaned) return cleaned;
   }
+
+  const titleMatch = document.title.match(/^(.+?)\s*[\|\-]\s*(LinkedIn|Messaging)/i);
+  const fromTitle = sanitizeContactName(titleMatch ? titleMatch[1] : '');
+  if (fromTitle) return fromTitle;
+
   return 'This contact';
 }
 
@@ -155,6 +198,7 @@ function applyThreadStagePreview(threadId, stageId) {
   listItem.querySelectorAll('.plcrm-inbox-dot').forEach(d => d.remove());
 
   const titleRow = threadLink.querySelector('.msg-conversation-card__row.msg-conversation-card__title-row');
+  const nameEl = threadLink.querySelector('.msg-conversation-listitem__participant-names, .msg-conversation-card__participant-names, .t-16, .t-14');
   if (titleRow) {
     if (stageId === 'new') {
       titleRow.style.backgroundColor = 'transparent';
@@ -168,6 +212,11 @@ function applyThreadStagePreview(threadId, stageId) {
       titleRow.style.border = `1px solid ${stage.color}`;
       titleRow.style.margin = '2px 0';
     }
+  }
+
+  if (nameEl) {
+    nameEl.style.color = stageId === 'new' ? '' : stage.color;
+    nameEl.style.fontWeight = stageId === 'new' ? '' : '600';
   }
 
   if (stageId !== 'new') {
@@ -301,8 +350,11 @@ function saveCurrentThread() {
     };
 
     chrome.storage.local.set({ threads }, () => {
-      document.getElementById('plcrm-save-btn').textContent = 'Saved ✓';
+      const saveBtn = document.getElementById('plcrm-save-btn');
+      saveBtn.textContent = 'Saved ✓';
+      saveBtn.classList.add('plcrm-saved');
       updateInboxUI();
+      loadAndPopulateSidebar(currentThreadId);
     });
   });
 }
@@ -330,12 +382,43 @@ function selectStage(stageId) {
 
 function markUnsaved() {
   unsavedChanges = true;
-  document.getElementById('plcrm-save-btn').textContent = 'Save';
+  const saveBtn = document.getElementById('plcrm-save-btn');
+  saveBtn.textContent = 'Save';
+  saveBtn.classList.remove('plcrm-saved');
 }
 
 function renderHistory(history) {
   const list = document.getElementById('plcrm-history-list');
-  list.innerHTML = (history || []).slice().reverse().map(i => `<div class="plcrm-history-item"><strong>${new Date(i.timestamp).toLocaleDateString()}</strong>: ${i.from} → ${i.to}</div>`).join('') || 'No history.';
+  const latest = (history || []).slice(-5).reverse();
+
+  if (!latest.length) {
+    list.innerHTML = 'No history.';
+    return;
+  }
+
+  list.innerHTML = latest.map((item) => {
+    const fromStage = stageMap[item.from] || { label: formatStageLabel(item.from), color: '#64748B' };
+    const toStage = stageMap[item.to] || { label: formatStageLabel(item.to), color: '#64748B' };
+    const formattedDate = new Date(item.timestamp).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    return `
+      <div class="plcrm-history-item">
+        <div class="plcrm-history-date">${formattedDate}</div>
+        <div class="plcrm-history-text">
+          Changed status from
+          <span class="plcrm-history-stage" style="--history-stage-color:${fromStage.color};">${fromStage.label}</span>
+          to
+          <span class="plcrm-history-stage" style="--history-stage-color:${toStage.color};">${toStage.label}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderAttachments(files) {
