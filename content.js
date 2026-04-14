@@ -41,6 +41,34 @@ function sanitizeContactName(rawName) {
   return cleaned;
 }
 
+function applyThreadNameColor(link, stageId) {
+  const stage = stageMap[stageId];
+  const color = stage?.color || '';
+  const shouldReset = stageId === 'new' || !stage;
+
+  const nameSelectors = [
+    '.msg-conversation-listitem__participant-names',
+    '.msg-conversation-card__participant-names',
+    '.msg-conversation-card__participant-names--pill',
+    '.msg-conversation-listitem__participant-names .truncate',
+    '.msg-conversation-card__participant-names .truncate',
+    '.t-16',
+    '.t-14'
+  ];
+
+  nameSelectors.forEach((selector) => {
+    link.querySelectorAll(selector).forEach((node) => {
+      if (shouldReset) {
+        node.style.removeProperty('color');
+        node.style.fontWeight = '';
+      } else {
+        node.style.setProperty('color', color, 'important');
+        node.style.fontWeight = '600';
+      }
+    });
+  });
+}
+
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 function init() {
@@ -85,21 +113,12 @@ function updateInboxUI() {
       listItem.querySelectorAll('.plcrm-inbox-dot').forEach(d => d.remove());
       
       const titleRow = link.querySelector('.msg-conversation-card__row.msg-conversation-card__title-row');
-      const nameEl = link.querySelector('.msg-conversation-listitem__participant-names, .msg-conversation-card__participant-names, .t-16, .t-14');
       if (titleRow) {
         titleRow.style.backgroundColor = 'transparent';
         titleRow.style.border = 'none';
         titleRow.style.padding = '0';
       }
-      if (nameEl) {
-        nameEl.style.removeProperty('color');
-        nameEl.style.fontWeight = '';
-        const nameTextEl = nameEl.querySelector('.truncate') || nameEl.querySelector('span');
-        if (nameTextEl) {
-          nameTextEl.style.removeProperty('color');
-          nameTextEl.style.fontWeight = '';
-        }
-      }
+      applyThreadNameColor(link, 'new');
 
       if (!data || !data.stage) return;
       const stage = stageMap[data.stage];
@@ -129,15 +148,7 @@ function updateInboxUI() {
         titleRow.style.margin = '2px 0';
       }
 
-      if (nameEl && data.stage !== 'new') {
-        nameEl.style.setProperty('color', stage.color, 'important');
-        nameEl.style.fontWeight = '600';
-        const nameTextEl = nameEl.querySelector('.truncate') || nameEl.querySelector('span');
-        if (nameTextEl) {
-          nameTextEl.style.setProperty('color', stage.color, 'important');
-          nameTextEl.style.fontWeight = '600';
-        }
-      }
+      applyThreadNameColor(link, data.stage);
     });
   });
 }
@@ -208,7 +219,6 @@ function applyThreadStagePreview(threadId, stageId) {
   listItem.querySelectorAll('.plcrm-inbox-dot').forEach(d => d.remove());
 
   const titleRow = threadLink.querySelector('.msg-conversation-card__row.msg-conversation-card__title-row');
-  const nameEl = threadLink.querySelector('.msg-conversation-listitem__participant-names, .msg-conversation-card__participant-names, .t-16, .t-14');
   if (titleRow) {
     if (stageId === 'new') {
       titleRow.style.backgroundColor = 'transparent';
@@ -224,23 +234,7 @@ function applyThreadStagePreview(threadId, stageId) {
     }
   }
 
-  if (nameEl) {
-    if (stageId === 'new') {
-      nameEl.style.removeProperty('color');
-    } else {
-      nameEl.style.setProperty('color', stage.color, 'important');
-    }
-    nameEl.style.fontWeight = stageId === 'new' ? '' : '600';
-    const nameTextEl = nameEl.querySelector('.truncate') || nameEl.querySelector('span');
-    if (nameTextEl) {
-      if (stageId === 'new') {
-        nameTextEl.style.removeProperty('color');
-      } else {
-        nameTextEl.style.setProperty('color', stage.color, 'important');
-      }
-      nameTextEl.style.fontWeight = stageId === 'new' ? '' : '600';
-    }
-  }
+  applyThreadNameColor(threadLink, stageId);
 
   if (stageId !== 'new') {
     const dot = document.createElement('span');
@@ -462,6 +456,25 @@ function checkCurrentThread() {
     currentThreadId = id;
     loadAndPopulateSidebar(id);
     updateContactHeader(getContactName(), getContactSubtitle());
+    return;
+  }
+
+  if (id) {
+    const name = getContactName();
+    const subtitle = getContactSubtitle();
+    if (name && name !== 'This contact') {
+      updateContactHeader(name, subtitle);
+    }
+    return;
+  }
+
+  if (currentThreadId !== null) {
+    currentThreadId = null;
+    document.getElementById('plcrm-no-thread').style.display = 'flex';
+    document.getElementById('plcrm-content').style.display = 'none';
+    document.getElementById('plcrm-contact-name').textContent = 'Select a conversation';
+    document.getElementById('plcrm-contact-title').textContent = '';
+    document.getElementById('plcrm-avatar').textContent = '';
   }
 }
 

@@ -12,7 +12,7 @@
       --text: #172b4d;
       --line: #dfe1e6;
       --shadow: 0 1px 1px rgba(9, 30, 66, .15), 0 0 1px rgba(9, 30, 66, .31);
-      --col-width: 320px;
+      --col-width: 280px;
     }
 
     * { box-sizing: border-box; }
@@ -144,6 +144,14 @@
     .kb-card-meta { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .kb-link { color: #0052cc; font-size: 12px; text-decoration: none; font-weight: 600; }
     .kb-link:hover { text-decoration: underline; }
+    button.kb-link {
+      border: none;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
+      text-align: left;
+    }
 
     .kb-due {
       font-size: 11px;

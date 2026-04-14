@@ -57,6 +57,7 @@ body {
   border-bottom: 1px solid #E8EDF2;
   background: white;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .pp-filter {
@@ -85,7 +86,7 @@ body {
 
 #pp-open-li {
   font-size: 11px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 20px;
   border: 1px solid #E2E8F0;
   background: transparent;
@@ -99,7 +100,7 @@ body {
 
 #pp-open-kanban {
   font-size: 11px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 20px;
   border: 1px solid #E2E8F0;
   background: transparent;
