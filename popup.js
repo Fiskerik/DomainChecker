@@ -14,7 +14,6 @@ const stageMap = Object.fromEntries(STAGES.map(s => [s.id, s]));
 
 let allThreads = [];
 let currentFilter = 'active';
-let currentInboxStageFilter = 'all';
 
 // ── Load Data ─────────────────────────────────────────────────────────────────
 
@@ -36,7 +35,6 @@ function renderAll() {
   updateStats();
   checkOverdue();
   renderList();
-  syncStageFilterUI();
 }
 
 function filterThreads(filter) {
@@ -91,9 +89,8 @@ function renderList() {
   list.querySelectorAll('.pp-card').forEach(card => {
     card.addEventListener('click', () => {
       const threadId = card.dataset.threadId;
-      chrome.runtime.sendMessage({
-        type: 'OPEN_LINKEDIN_THREAD',
-        threadId
+      chrome.tabs.create({
+        url: `https://www.linkedin.com/messaging/thread/${threadId}/`
       });
     });
   });
@@ -195,52 +192,27 @@ document.querySelectorAll('.pp-filter').forEach(btn => {
 });
 
 document.getElementById('pp-open-li').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'OPEN_LINKEDIN' });
-});
-
-document.getElementById('pp-open-sidebar').addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_PANEL' }, (resp) => {
-    if (chrome.runtime.lastError) {
-      console.log('[Pipeline CRM] Failed to open side panel:', chrome.runtime.lastError.message);
-      return;
+  chrome.tabs.query({ url: 'https://www.linkedin.com/messaging/*' }, (tabs) => {
+    if (tabs.length > 0) {
+      // LinkedIn messaging is already open — switch to that tab
+      chrome.tabs.update(tabs[0].id, { active: true });
+      chrome.windows.update(tabs[0].windowId, { focused: true });
+    } else {
+      // Not open — create a new tab
+      chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
     }
-    console.log('[Pipeline CRM] Open side panel response:', resp);
   });
 });
 
-document.getElementById('pp-open-kanban').addEventListener('click', () => {
-  const kanbanUrl = chrome.runtime.getURL('kanban.html');
-  chrome.tabs.create({ url: kanbanUrl });
+// On load: check if LinkedIn is already open and update button label
+chrome.tabs.query({ url: 'https://www.linkedin.com/messaging/*' }, (tabs) => {
+  const btn = document.getElementById('pp-open-li');
+  if (tabs.length > 0) {
+    btn.textContent = 'Switch to LinkedIn ↗';
+    btn.style.background    = '#EFF6FF';
+    btn.style.borderColor   = '#BFDBFE';
+  }
 });
-
-document.getElementById('pp-stage-filter').addEventListener('change', (e) => {
-  currentInboxStageFilter = e.target.value || 'all';
-  chrome.storage.local.set({ popupInboxStageFilter: currentInboxStageFilter });
-  applyInboxStageFilter(currentInboxStageFilter);
-});
-
-function syncStageFilterUI() {
-  chrome.storage.local.get(['popupInboxStageFilter'], (result) => {
-    currentInboxStageFilter = result.popupInboxStageFilter || 'all';
-    const select = document.getElementById('pp-stage-filter');
-    if (select) select.value = currentInboxStageFilter;
-    applyInboxStageFilter(currentInboxStageFilter);
-  });
-}
-
-function applyInboxStageFilter(stageId) {
-  console.log('[Pipeline CRM] Popup apply inbox stage filter:', stageId);
-  chrome.runtime.sendMessage({
-    type: 'APPLY_INBOX_FILTER',
-    stageId
-  }, (resp) => {
-    if (chrome.runtime.lastError) {
-      console.log('[Pipeline CRM] Failed to apply inbox filter:', chrome.runtime.lastError.message);
-      return;
-    }
-    console.log('[Pipeline CRM] Inbox filter result:', resp);
-  });
-}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 loadData();

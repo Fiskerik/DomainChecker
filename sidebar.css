@@ -308,8 +308,8 @@
 
 #plcrm-save-btn {
   flex: 1;
-  background: #16A34A;
-  color: #F0FDF4;
+  background: #0F1923;
+  color: #F0F6FF;
   border: none;
   border-radius: 8px;
   padding: 9px 16px;
@@ -321,7 +321,7 @@
 }
 
 #plcrm-save-btn:hover {
-  background: #15803D;
+  background: #1A2C3D;
 }
 
 #plcrm-save-btn:active {
@@ -329,7 +329,7 @@
 }
 
 #plcrm-save-btn.plcrm-saved {
-  background: #047857;
+  background: #059669;
 }
 
 #plcrm-saved-msg {
@@ -351,87 +351,292 @@
 #plcrm-content::-webkit-scrollbar-track { background: transparent; }
 #plcrm-content::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
 
-/* ── Inbox Stage Dots ────────────────────────────────────── */
+/* ── Inbox Stage Bar ─────────────────────────────────────── */
 /*
-  Injected into LinkedIn's <li> conversation list items.
-  Positioned at bottom-left to sit over the avatar corner,
-  matching where LinkedIn places its own "online" green dot.
-  plcrm- namespace prevents collisions with LinkedIn styles.
+  A thin colored bar on the LEFT edge of each conversation list item.
+  Far more reliable than a positioned dot: no coordinate math,
+  no overflow:hidden issues, impossible to confuse with LinkedIn's
+  own online-status indicator.
 */
-.plcrm-inbox-dot {
+.plcrm-bar {
   position: absolute;
-  /* Sit at the bottom-left of the avatar area.
-     LinkedIn avatars in the list are roughly 48px wide,
-     positioned about 12px from the left of the list item. */
-  bottom: 8px;
-  left: 44px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--dot-color, #94A3B8);
-  border: 2px solid #fff;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--bar-color, #94A3B8);
   pointer-events: none;
-  z-index: 9999;
-  display: block;
+  z-index: 99999;
 }
 
-/* Pulsing ring for overdue follow-ups */
-.plcrm-inbox-dot.plcrm-dot-overdue {
-  animation: plcrm-pulse 1.8s ease-out infinite;
+.plcrm-bar.plcrm-bar-overdue {
+  animation: plcrm-bar-pulse 1.8s ease-out infinite;
 }
 
-@keyframes plcrm-pulse {
-  0%   { box-shadow: 0 0 0 0 var(--dot-color); }
-  60%  { box-shadow: 0 0 0 5px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+@keyframes plcrm-bar-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.35; }
+  100% { opacity: 1; }
 }
 
-/* History Styles */
-.plcrm-history-item {
-  font-size: 11px;
-  color: #334155;
-  padding: 7px 0;
-  border-bottom: 1px dashed #E2E8F0;
+/* ── Contact Info Drawer ─────────────────────────────────── */
+#plcrm-contact-drawer {
+  background: #F0F4F8;
+  border-bottom: 1px solid #E2E8F0;
+  padding: 12px 14px 10px;
+  flex-shrink: 0;
 }
 
-.plcrm-history-date {
-  color: #64748B;
-  margin-bottom: 3px;
+.plcrm-drawer-grid {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 6px 8px;
+  align-items: center;
 }
 
-.plcrm-history-text {
-  line-height: 1.45;
+.plcrm-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94A3B8;
+  white-space: nowrap;
 }
 
-.plcrm-history-stage {
-  display: inline-block;
-  margin: 0 2px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid var(--history-stage-color, #64748B);
-  color: var(--history-stage-color, #64748B);
-  font-weight: 600;
-  background: #fff;
-}
-
-/* File List Styles */
-.plcrm-action-link {
+.plcrm-field-input {
+  width: 100%;
+  border: 1px solid #DDE3EA;
+  border-radius: 6px;
+  padding: 5px 8px;
   font-size: 12px;
+  font-family: inherit;
+  color: #1C2B3A;
+  background: white;
+  transition: border-color 0.12s;
+  box-sizing: border-box;
+}
+
+.plcrm-field-input:focus {
+  outline: none;
+  border-color: #3B82F6;
+}
+
+#plcrm-ci-hint {
+  font-size: 10.5px;
+  color: #B0BBC6;
+  margin-top: 8px;
+  text-align: right;
+}
+
+/* ── Icon buttons in header ──────────────────────────────── */
+.plcrm-icon-btn {
+  background: none;
+  border: none;
+  color: #7A9BB8;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 4px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+.plcrm-icon-btn:hover { color: #F0F6FF; }
+.plcrm-icon-btn.plcrm-icon-active { color: #60A5FA; }
+
+/* ── Section label row (for Files) ──────────────────────── */
+.plcrm-section-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.plcrm-section-label-row .plcrm-section-label {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.plcrm-add-file-label {
+  font-size: 11px;
+  font-weight: 600;
   color: #3B82F6;
+  cursor: pointer;
+  padding: 2px 8px;
+  border: 1px solid #BFDBFE;
+  border-radius: 10px;
+  background: #EFF6FF;
+  transition: background 0.12s;
+  white-space: nowrap;
+  user-select: none;
+}
+.plcrm-add-file-label:hover { background: #DBEAFE; }
+
+/* ── File chips ──────────────────────────────────────────── */
+#plcrm-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.plcrm-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.plcrm-file-icon { font-size: 14px; flex-shrink: 0; }
+
+.plcrm-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+}
+
+.plcrm-file-size {
+  font-size: 10px;
+  color: #94A3B8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.plcrm-file-dl, .plcrm-file-del {
   background: none;
   border: none;
   cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-  margin-top: 4px;
-}
-.plcrm-action-link:hover { text-decoration: underline; }
-
-.plcrm-file-item {
-  margin-top: 5px;
-  padding: 6px;
-  background: #fff;
-  border: 1px solid #E2E8F0;
+  font-size: 12px;
+  color: #94A3B8;
+  padding: 1px 4px;
   border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+.plcrm-file-dl:hover  { color: #3B82F6; }
+.plcrm-file-del:hover { color: #EF4444; }
+
+#plcrm-file-hint { font-size: 11px; margin-top: 5px; }
+.plcrm-file-hint-warn { color: #F59E0B; }
+
+/* ── Inbox list item overdue pulse ──────────────────────── */
+@keyframes plcrm-li-pulse {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+.plcrm-li-overdue {
+  animation: plcrm-li-pulse 2s ease-in-out infinite;
 }
 
+/* ── Kanban link at bottom of sidebar ───────────────────── */
+#plcrm-kanban-link {
+  padding: 0 14px 12px;
+}
+#plcrm-open-kanban {
+  width: 100%;
+  background: none;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7C3AED;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+#plcrm-open-kanban:hover { background: #F5F3FF; }
+
+/* ── Contact info drawer ─────────────────────────────────── */
+#plcrm-contact-drawer {
+  background: #F0F4F8;
+  border-bottom: 1px solid #E2E8F0;
+  padding: 10px 14px;
+  flex-shrink: 0;
+}
+.plcrm-drawer-grid {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 5px 8px;
+  align-items: center;
+}
+.plcrm-field-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #94A3B8; white-space: nowrap;
+}
+.plcrm-field-input {
+  width: 100%; border: 1px solid #DDE3EA; border-radius: 6px;
+  padding: 4px 8px; font-size: 12px; font-family: inherit;
+  color: #1C2B3A; background: white; box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+.plcrm-field-input:focus { outline: none; border-color: #3B82F6; }
+.plcrm-ci-hint {
+  font-size: 10px; color: #B0BBC6; margin-top: 6px; text-align: right;
+}
+
+/* ── Icon buttons ────────────────────────────────────────── */
+.plcrm-icon-btn {
+  background: none; border: none; color: #7A9BB8; cursor: pointer;
+  font-size: 15px; padding: 3px 5px; border-radius: 4px;
+  line-height: 1; flex-shrink: 0; transition: color 0.1s;
+}
+.plcrm-icon-btn:hover { color: #F0F6FF; }
+.plcrm-icon-btn.plcrm-icon-active { color: #60A5FA; }
+
+/* ── Section label row ───────────────────────────────────── */
+.plcrm-section-label-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.plcrm-section-label-row .plcrm-section-label { margin-bottom: 0; flex: 1; }
+
+.plcrm-add-file-label {
+  font-size: 11px; font-weight: 600; color: #3B82F6; cursor: pointer;
+  padding: 2px 8px; border: 1px solid #BFDBFE; border-radius: 10px;
+  background: #EFF6FF; white-space: nowrap; user-select: none;
+  transition: background 0.12s;
+}
+.plcrm-add-file-label:hover { background: #DBEAFE; }
+
+/* ── File chips ──────────────────────────────────────────── */
+.plcrm-file-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: white; border: 1px solid #E2E8F0; border-radius: 6px;
+  padding: 4px 7px; font-size: 11px; margin-bottom: 4px;
+}
+.plcrm-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; }
+.plcrm-file-size { font-size: 10px; color: #94A3B8; white-space: nowrap; flex-shrink: 0; }
+.plcrm-file-dl, .plcrm-file-del {
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; color: #94A3B8; padding: 1px 3px;
+  border-radius: 3px; flex-shrink: 0; transition: color 0.1s;
+}
+.plcrm-file-dl:hover  { color: #3B82F6; }
+.plcrm-file-del:hover { color: #EF4444; }
+#plcrm-file-hint { font-size: 10px; margin-top: 4px; }
+.plcrm-file-hint-warn { color: #F59E0B; }
+
+/* ── History ─────────────────────────────────────────────── */
+.plcrm-history-item {
+  font-size: 11px; color: #334155;
+  padding: 5px 0; border-bottom: 1px dashed #E2E8F0;
+}
+.plcrm-history-date { color: #94A3B8; font-size: 10px; margin-bottom: 2px; }
+.plcrm-history-stage {
+  display: inline-block; padding: 0 5px; border-radius: 8px;
+  border: 1px solid; font-weight: 600; font-size: 10px;
+}
+.plcrm-followup-hint { font-size: 11px; margin-top: 5px; font-weight: 500; }
+.plcrm-hint-overdue { color: #EF4444; }
+.plcrm-hint-soon    { color: #F59E0B; }
+.plcrm-hint-future  { color: #10B981; }
+
+/* ── Contact meta wrapper in header ─────────────────────── */
+#plcrm-contact-meta { flex: 1; min-width: 0; }

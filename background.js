@@ -1,180 +1,160 @@
-// Pipeline CRM — Background Service Worker
-// Handles follow-up alarms, browser notifications, and LinkedIn tab focusing
+// Pipeline CRM — Background Service Worker v3
+// Fix: open thread in existing LinkedIn tab WITHOUT causing a page reload
 
-function openOrFocusLinkedIn(url = 'https://www.linkedin.com/messaging/') {
-  chrome.tabs.query({ url: 'https://www.linkedin.com/*' }, (tabs) => {
-    if (chrome.runtime.lastError) {
-      console.log('[Pipeline CRM] Could not query tabs:', chrome.runtime.lastError.message);
-      chrome.tabs.create({ url });
-      return;
-    }
+// ─── Tab Helpers ──────────────────────────────────────────────────────────────
 
-    const existingTab = tabs.find((tab) => tab && tab.id);
-    if (existingTab?.id) {
-      chrome.tabs.update(existingTab.id, { url, active: true }, (updatedTab) => {
-        if (chrome.runtime.lastError) {
-          console.log('[Pipeline CRM] Could not update existing tab, opening new tab:', chrome.runtime.lastError.message);
-          chrome.tabs.create({ url });
-          return;
-        }
-        if (updatedTab?.windowId !== undefined) {
-          chrome.windows.update(updatedTab.windowId, { focused: true });
-        }
-      });
-      return;
-    }
-
-    chrome.tabs.create({ url });
-  });
-}
-
-function findLinkedInMessagingTab(callback) {
-  chrome.tabs.query({ url: 'https://www.linkedin.com/messaging/*' }, (tabs) => {
-    if (chrome.runtime.lastError) {
-      console.log('[Pipeline CRM] Could not query messaging tabs:', chrome.runtime.lastError.message);
-      callback(null);
-      return;
-    }
-    const tab = tabs.find((item) => item && item.id);
-    callback(tab || null);
+function findLinkedInTab(cb) {
+  chrome.tabs.query({ url: 'https://www.linkedin.com/messaging/*' }, function(tabs) {
+    if (chrome.runtime.lastError) { cb(null); return; }
+    cb((tabs && tabs.length > 0) ? tabs[0] : null);
   });
 }
 
 function focusTab(tabId, windowId) {
-  if (!tabId) return;
-  chrome.tabs.update(tabId, { active: true }, () => {
-    if (chrome.runtime.lastError) {
-      console.log('[Pipeline CRM] Could not focus tab:', chrome.runtime.lastError.message);
-    }
+  chrome.tabs.update(tabId, { active: true }, function() {
+    if (chrome.runtime.lastError) return;
+    if (windowId !== undefined) chrome.windows.update(windowId, { focused: true });
   });
-  if (windowId !== undefined) {
-    chrome.windows.update(windowId, { focused: true }, () => {
-      if (chrome.runtime.lastError) {
-        console.log('[Pipeline CRM] Could not focus window:', chrome.runtime.lastError.message);
-      }
-    });
-  }
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+function openLinkedIn(url) {
+  url = url || 'https://www.linkedin.com/messaging/';
+  // Check if LinkedIn is open anywhere (not just /messaging/)
+  chrome.tabs.query({ url: 'https://www.linkedin.com/*' }, function(tabs) {
+    if (tabs && tabs.length > 0) {
+      chrome.tabs.update(tabs[0].id, { url: url, active: true });
+      if (tabs[0].windowId) chrome.windows.update(tabs[0].windowId, { focused: true });
+    } else {
+      chrome.tabs.create({ url: url });
+    }
+  });
+}
+
+// ─── Message Handler ──────────────────────────────────────────────────────────
+
+chrome.runtime.onMessage.addListener(function(msg, _sender, sendResponse) {
+  if (!msg) return true;
+
+  // ── Open Kanban board ──
   if (msg.type === 'OPEN_KANBAN') {
-    chrome.tabs.create({ url: 'kanban.html' });
-  }
-  if (msg.type === 'OPEN_LINKEDIN') {
-    openOrFocusLinkedIn(msg.url || 'https://www.linkedin.com/messaging/');
+    chrome.tabs.create({ url: chrome.runtime.getURL('kanban.html') });
     sendResponse({ ok: true });
+    return true;
   }
+
+  // ── Open / focus LinkedIn ──
+  if (msg.type === 'OPEN_LINKEDIN') {
+    findLinkedInTab(function(tab) {
+      if (tab) {
+        focusTab(tab.id, tab.windowId);
+      } else {
+        chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
+      }
+    });
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // ── FIX 3: Open specific thread WITHOUT page reload ──────────────────────
+  // Strategy:
+  //   1. If a /messaging/ tab is open, send it a SELECT_LINKEDIN_THREAD message.
+  //      The content script clicks the row — zero reload.
+  //   2. If that message fails (thread not visible in list), navigate to the
+  //      thread URL in the existing tab — still no new tab, but causes a reload.
+  //   3. If no LinkedIn tab at all, open a new one.
   if (msg.type === 'OPEN_LINKEDIN_THREAD') {
-    const threadId = String(msg.threadId || '').trim();
-    const targetUrl = threadId
-      ? `https://www.linkedin.com/messaging/thread/${threadId}/`
+    var threadId  = String(msg.threadId || '').trim();
+    var targetUrl = threadId
+      ? 'https://www.linkedin.com/messaging/thread/' + threadId + '/'
       : 'https://www.linkedin.com/messaging/';
-    console.log('[Pipeline CRM] OPEN_LINKEDIN_THREAD', { threadId, targetUrl });
 
-    findLinkedInMessagingTab((tab) => {
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'SELECT_LINKEDIN_THREAD',
-          threadId
-        }, (resp) => {
-          if (chrome.runtime.lastError) {
-            console.log('[Pipeline CRM] Could not select thread in existing tab:', chrome.runtime.lastError.message);
-            openOrFocusLinkedIn(targetUrl);
-            sendResponse({ ok: true, mode: 'fallback_reload' });
-            return;
-          }
-
-          if (resp?.ok) {
-            focusTab(tab.id, tab.windowId);
-            sendResponse({ ok: true, mode: 'selected_in_existing_tab' });
-            return;
-          }
-
-          openOrFocusLinkedIn(targetUrl);
-          sendResponse({ ok: true, mode: 'fallback_reload_no_row' });
-        });
+    findLinkedInTab(function(tab) {
+      if (!tab) {
+        // No LinkedIn open — create fresh tab with correct URL
+        chrome.tabs.create({ url: targetUrl });
+        sendResponse({ ok: true, mode: 'new_tab' });
         return;
       }
 
-      openOrFocusLinkedIn(targetUrl);
-      sendResponse({ ok: true, mode: 'opened_or_updated_tab' });
+      // LinkedIn tab exists — try to click the row (no reload)
+      focusTab(tab.id, tab.windowId);
+
+      chrome.tabs.sendMessage(tab.id, { type: 'SELECT_LINKEDIN_THREAD', threadId: threadId }, function(resp) {
+        if (chrome.runtime.lastError || !resp || !resp.ok) {
+          // Row wasn't visible in the list — navigate to URL in same tab
+          // This reloads the page but keeps the same tab (no new tab)
+          chrome.tabs.update(tab.id, { url: targetUrl });
+          sendResponse({ ok: true, mode: 'url_navigate' });
+        } else {
+          sendResponse({ ok: true, mode: 'clicked_row' });
+        }
+      });
     });
+    return true; // keep sendResponse open (async)
   }
+
+  // ── Open sidebar panel in existing LinkedIn tab ──
   if (msg.type === 'OPEN_SIDEBAR_PANEL') {
-    findLinkedInMessagingTab((tab) => {
-      if (!tab?.id) {
-        openOrFocusLinkedIn('https://www.linkedin.com/messaging/');
-        sendResponse({ ok: false, reason: 'tab_not_found' });
+    findLinkedInTab(function(tab) {
+      if (!tab) {
+        openLinkedIn('https://www.linkedin.com/messaging/');
+        sendResponse({ ok: false, reason: 'no_tab' });
         return;
       }
       focusTab(tab.id, tab.windowId);
-      chrome.tabs.sendMessage(tab.id, { type: 'OPEN_SIDEBAR_PANEL' }, (resp) => {
-        if (chrome.runtime.lastError) {
-          console.log('[Pipeline CRM] Could not open sidebar panel:', chrome.runtime.lastError.message);
-          sendResponse({ ok: false, reason: 'send_failed' });
-          return;
-        }
-        sendResponse({ ok: !!resp?.ok });
+      chrome.tabs.sendMessage(tab.id, { type: 'OPEN_SIDEBAR_PANEL' }, function(resp) {
+        sendResponse({ ok: !chrome.runtime.lastError && resp && resp.ok });
       });
     });
+    return true;
   }
-  if (msg.type === 'APPLY_INBOX_FILTER') {
-    findLinkedInMessagingTab((tab) => {
-      if (!tab?.id) {
-        console.log('[Pipeline CRM] No LinkedIn messaging tab found for inbox filter');
-        sendResponse({ ok: false, reason: 'tab_not_found' });
-        return;
-      }
 
-      chrome.tabs.sendMessage(tab.id, {
-        type: 'APPLY_INBOX_FILTER',
-        stageId: msg.stageId || 'all'
-      }, (resp) => {
-        if (chrome.runtime.lastError) {
-          console.log('[Pipeline CRM] Could not send inbox filter message:', chrome.runtime.lastError.message);
-          sendResponse({ ok: false, reason: 'send_failed' });
-          return;
-        }
-        sendResponse({ ok: true, response: resp || null });
+  // ── Apply inbox filter ──
+  if (msg.type === 'APPLY_INBOX_FILTER') {
+    findLinkedInTab(function(tab) {
+      if (!tab) { sendResponse({ ok: false }); return; }
+      chrome.tabs.sendMessage(tab.id, { type: 'APPLY_INBOX_FILTER', stageId: msg.stageId }, function(resp) {
+        sendResponse({ ok: !chrome.runtime.lastError });
       });
     });
+    return true;
   }
+
+  // ── Schedule alarm ──
   if (msg.type === 'SCHEDULE_ALARM') {
     chrome.alarms.create(msg.alarmName, { when: msg.alarmTime });
-
-    // Store alarm metadata so we can read it on fire
-    chrome.storage.local.get(['alarmMeta'], (result) => {
-      const meta = result.alarmMeta || {};
-      meta[msg.alarmName] = {
-        contactName: msg.contactName,
-        threadId:    msg.threadId
-      };
+    chrome.storage.local.get(['alarmMeta'], function(r) {
+      var meta = r.alarmMeta || {};
+      meta[msg.alarmName] = { contactName: msg.contactName, threadId: msg.threadId };
       chrome.storage.local.set({ alarmMeta: meta });
     });
-
     sendResponse({ ok: true });
+    return true;
   }
+
   return true;
 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+// ─── Alarm Notifications ──────────────────────────────────────────────────────
+
+chrome.alarms.onAlarm.addListener(function(alarm) {
   if (!alarm.name.startsWith('followup_')) return;
-
-  chrome.storage.local.get(['alarmMeta'], (result) => {
-    const meta = (result.alarmMeta || {})[alarm.name];
-    const name = meta?.contactName || 'a prospect';
-
+  chrome.storage.local.get(['alarmMeta'], function(r) {
+    var meta = (r.alarmMeta || {})[alarm.name];
+    var name = (meta && meta.contactName) || 'a prospect';
     chrome.notifications.create(alarm.name, {
-      type:    'basic',
-      iconUrl: 'icons/icon48.png',
-      title:   'Follow-up reminder — Pipeline CRM',
-      message: `Time to follow up with ${name} on LinkedIn.`,
+      type: 'basic', iconUrl: 'icons/icon48.png',
+      title: 'Follow-up — Pipeline CRM',
+      message: 'Time to follow up with ' + name + ' on LinkedIn.',
       buttons: [{ title: 'Open LinkedIn' }],
       priority: 2
     });
   });
 });
 
-chrome.notifications.onButtonClicked.addListener((notifId) => {
-  openOrFocusLinkedIn('https://www.linkedin.com/messaging/');
+chrome.notifications.onButtonClicked.addListener(function() {
+  findLinkedInTab(function(tab) {
+    if (tab) focusTab(tab.id, tab.windowId);
+    else chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
+  });
 });
