@@ -66,10 +66,20 @@ function createCard(threadId, data, stage) {
     ${data.title ? `<div class="kb-card-title">${escapeHtml(data.title)}</div>` : ''}
     ${data.notes ? `<div class="kb-card-notes">${escapeHtml(truncate(data.notes, 180))}</div>` : ''}
     <div class="kb-card-meta">
-      <a class="kb-link" href="https://www.linkedin.com/messaging/thread/${threadId}/" target="_blank" rel="noreferrer">Open thread ↗</a>
+      <button class="kb-link kb-open-thread-btn" type="button" data-thread-id="${threadId}">Open thread ↗</button>
       ${due ? `<span class="kb-due ${due.overdue ? 'overdue' : ''}">${due.label}</span>` : ''}
     </div>
   `;
+
+  const openThreadBtn = card.querySelector('.kb-open-thread-btn');
+  if (openThreadBtn) {
+    openThreadBtn.addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'OPEN_LINKEDIN_THREAD',
+        threadId
+      });
+    });
+  }
 
   card.addEventListener('dragstart', (event) => {
     draggingThreadId = threadId;
@@ -166,7 +176,7 @@ function escapeHtml(text) {
 
 document.getElementById('kb-refresh').addEventListener('click', renderBoard);
 document.getElementById('kb-open-li').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
+  chrome.runtime.sendMessage({ type: 'OPEN_LINKEDIN' });
 });
 
 renderBoard();

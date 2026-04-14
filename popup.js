@@ -89,8 +89,9 @@ function renderList() {
   list.querySelectorAll('.pp-card').forEach(card => {
     card.addEventListener('click', () => {
       const threadId = card.dataset.threadId;
-      chrome.tabs.create({
-        url: `https://www.linkedin.com/messaging/thread/${threadId}/`
+      chrome.runtime.sendMessage({
+        type: 'OPEN_LINKEDIN_THREAD',
+        threadId
       });
     });
   });
@@ -192,7 +193,7 @@ document.querySelectorAll('.pp-filter').forEach(btn => {
 });
 
 document.getElementById('pp-open-li').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
+  chrome.runtime.sendMessage({ type: 'OPEN_LINKEDIN' });
 });
 
 document.getElementById('pp-open-kanban').addEventListener('click', () => {
