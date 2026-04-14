@@ -195,5 +195,10 @@ document.getElementById('pp-open-li').addEventListener('click', () => {
   chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
 });
 
+document.getElementById('pp-open-kanban').addEventListener('click', () => {
+  const kanbanUrl = chrome.runtime.getURL('kanban.html');
+  chrome.tabs.create({ url: kanbanUrl });
+});
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 loadData();
