@@ -138,6 +138,46 @@ function updateLinkedInHeaderBackground(stageId) {
   }
 }
 
+function applyThreadStagePreview(threadId, stageId) {
+  if (!threadId) return;
+  const stage = stageMap[stageId];
+  if (!stage) return;
+
+  const threadLink = document.querySelector(`a[href*="/messaging/thread/${threadId}"]`);
+  if (!threadLink) {
+    console.log('[Pipeline CRM] Could not find thread row for stage preview:', threadId, stageId);
+    return;
+  }
+
+  const listItem = threadLink.closest('li') || threadLink.parentElement;
+  if (!listItem) return;
+
+  listItem.querySelectorAll('.plcrm-inbox-dot').forEach(d => d.remove());
+
+  const titleRow = threadLink.querySelector('.msg-conversation-card__row.msg-conversation-card__title-row');
+  if (titleRow) {
+    if (stageId === 'new') {
+      titleRow.style.backgroundColor = 'transparent';
+      titleRow.style.border = 'none';
+      titleRow.style.padding = '0';
+      titleRow.style.margin = '0';
+    } else {
+      titleRow.style.backgroundColor = stage.bg;
+      titleRow.style.padding = '2px 8px';
+      titleRow.style.borderRadius = '4px';
+      titleRow.style.border = `1px solid ${stage.color}`;
+      titleRow.style.margin = '2px 0';
+    }
+  }
+
+  if (stageId !== 'new') {
+    const dot = document.createElement('span');
+    dot.className = 'plcrm-inbox-dot';
+    dot.style.setProperty('--dot-color', stage.color);
+    listItem.appendChild(dot);
+  }
+}
+
 // ─── Sidebar Logic ───────────────────────────────────────────────────────────
 
 function injectSidebar() {
@@ -197,6 +237,7 @@ function attachSidebarEvents() {
     if (!btn) return;
     selectStage(btn.dataset.stage);
     updateLinkedInHeaderBackground(btn.dataset.stage);
+    applyThreadStagePreview(currentThreadId, btn.dataset.stage);
     markUnsaved();
   });
 
