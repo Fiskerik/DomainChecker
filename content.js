@@ -15,6 +15,7 @@ let currentThreadId   = null;
 let lastUrl           = location.href;
 let unsavedChanges    = false;
 let inboxUpdateTimer  = null;
+let inboxFilterStage  = 'all';
 
 const stageMap = Object.fromEntries(STAGES.map(s => [s.id, s]));
 
@@ -52,8 +53,11 @@ function applyThreadNameColor(link, stageId) {
     '.msg-conversation-card__participant-names--pill',
     '.msg-conversation-listitem__participant-names .truncate',
     '.msg-conversation-card__participant-names .truncate',
-    '.t-16',
-    '.t-14'
+    '.msg-conversation-card__title-row h3',
+    '.msg-conversation-card__title-row h3 .display-flex',
+    '.msg-conversation-card__title-row h3 span',
+    '.msg-conversation-listitem__participant-names *',
+    '.msg-conversation-card__participant-names *'
   ];
 
   nameSelectors.forEach((selector) => {
@@ -109,6 +113,11 @@ function updateInboxUI() {
       const data     = threads[threadId];
       const listItem = link.closest('li') || link.parentElement;
 
+      if (!listItem) return;
+
+      const stageId = data?.stage || 'new';
+      listItem.style.display = shouldShowThreadForFilter(stageId) ? '' : 'none';
+
       // Reset existing styles and clean dots
       listItem.querySelectorAll('.plcrm-inbox-dot').forEach(d => d.remove());
       
@@ -153,6 +162,32 @@ function updateInboxUI() {
   });
 }
 
+function rowNameFromThreadId(threadId) {
+  if (!threadId) return '';
+
+  const row = document.querySelector(`a[href*="/messaging/thread/${threadId}"]`);
+  if (!row) return '';
+
+  const candidates = [
+    row.querySelector('.msg-conversation-listitem__participant-names'),
+    row.querySelector('.msg-conversation-card__participant-names'),
+    row.querySelector('h3.msg-conversation-listitem__participant-names')
+  ].filter(Boolean);
+
+  for (const el of candidates) {
+    const cleaned = sanitizeContactName(el.textContent || '');
+    if (cleaned) return cleaned;
+  }
+
+  return '';
+}
+
+function shouldShowThreadForFilter(stageId) {
+  if (inboxFilterStage === 'all') return true;
+  if (inboxFilterStage === 'unlabeled') return !stageId || stageId === 'new';
+  return stageId === inboxFilterStage;
+}
+
 // ─── Thread Detection ─────────────────────────────────────────────────────────
 
 function getThreadId() {
@@ -161,6 +196,9 @@ function getThreadId() {
 }
 
 function getContactName() {
+  const fromSelectedRow = rowNameFromThreadId(getThreadId());
+  if (fromSelectedRow) return fromSelectedRow;
+
   const selectors = [
     '.msg-entity-lockup__entity-title',
     '.msg-thread__link-to-profile',
@@ -492,5 +530,14 @@ function resetSidebar() {
   renderAttachments([]);
   updateLinkedInHeaderBackground('new');
 }
+
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type !== 'APPLY_INBOX_FILTER') return;
+  inboxFilterStage = msg.stageId || 'all';
+  console.log('[Pipeline CRM] Applying inbox stage filter:', inboxFilterStage);
+  updateInboxUI();
+  sendResponse({ ok: true, stageId: inboxFilterStage });
+});
 
 init();
