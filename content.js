@@ -52,9 +52,6 @@ if (document.readyState === 'loading') {
 }
 
 // ─── FIX 1: Contact Name Detection ───────────────────────────────────────────
-// Issue: name showed "This contact" because sanitizeContactName was too aggressive
-// and timing was off. New approach: multiple strategies, longer delay, no
-// blacklisting of real names.
 
 function getContactName() {
   // Strategy 1: conversation header — most reliable when a thread is open
@@ -139,10 +136,8 @@ function getInitials(name) {
 }
 
 // ─── FIX 2: Inbox List Colors ─────────────────────────────────────────────────
-// Issue: colors only showed on the open message preview, not the left-side list.
-// Root cause: CSS selector `.msg-conversation-card__row.msg-conversation-card__title-row`
-// doesn't match LinkedIn's current DOM. Fix: style the <li> element directly —
-// a colored left border + subtle tinted background. This is layout-proof.
+// Targets the name element directly and styles it with a colored background,
+// which is much harder for LinkedIn's CSS to override than styling the <li>.
 
 function updateInboxColors() {
   chrome.storage.local.get(['threads'], function(result) {
@@ -157,10 +152,22 @@ function updateInboxColors() {
       var li       = link.closest('li') || link.parentElement;
       if (!li) return;
 
-      // Remove our previous injections cleanly
+      // ── Clean up previous injections ──
       li.style.removeProperty('border-left');
       li.style.removeProperty('background-color');
       li.querySelectorAll('.plcrm-stage-label').forEach(function(el) { el.remove(); });
+
+      // Also clean any previously styled name element
+      var prevNameEl = link.querySelector('.msg-conversation-listitem__participant-names') ||
+                       link.querySelector('.msg-conversation-card__participant-names') ||
+                       link.querySelector('[dir="ltr"]');
+      if (prevNameEl) {
+        prevNameEl.style.removeProperty('background-color');
+        prevNameEl.style.removeProperty('color');
+        prevNameEl.style.removeProperty('border-radius');
+        prevNameEl.style.removeProperty('padding');
+        prevNameEl.style.removeProperty('display');
+      }
 
       // Filter: hide/show based on inbox stage filter
       var stage = data && data.stage ? data.stage : 'new';
@@ -172,37 +179,25 @@ function updateInboxColors() {
       var s = stageMap[data.stage];
       if (!s) return;
 
-      // ── The key fix: style the <li> directly ──
-      // LinkedIn's list items are flex rows; a left border always renders.
-      li.style.setProperty('border-left', '4px solid ' + s.color, 'important');
-      li.style.setProperty('background-color', s.bg, 'important');
+      // ── Style the name element directly ──
+      // This targets the text itself, bypassing LinkedIn's <li> CSS overrides.
+      var nameEl = link.querySelector('.msg-conversation-listitem__participant-names') ||
+                   link.querySelector('.msg-conversation-card__participant-names') ||
+                   link.querySelector('[dir="ltr"]');
 
-      // Inject a tiny stage pill inside the link for extra clarity
-      if (!link.querySelector('.plcrm-stage-label')) {
-        var pill = document.createElement('span');
-        pill.className = 'plcrm-stage-label';
-        pill.textContent = s.label;
-        pill.style.cssText = [
-          'position:absolute',
-          'bottom:6px',
-          'right:8px',
-          'font-size:9px',
-          'font-weight:700',
-          'padding:1px 6px',
-          'border-radius:8px',
-          'background:' + s.color,
-          'color:#fff',
-          'pointer-events:none',
-          'z-index:9999',
-          'letter-spacing:0.03em',
-          'white-space:nowrap'
-        ].join(';');
-
-        if (getComputedStyle(link).position === 'static') link.style.position = 'relative';
-        link.appendChild(pill);
+      if (nameEl) {
+        nameEl.style.setProperty('background-color', s.color, 'important');
+        nameEl.style.setProperty('color', '#fff', 'important');
+        nameEl.style.setProperty('border-radius', '4px', 'important');
+        nameEl.style.setProperty('padding', '1px 6px', 'important');
+        nameEl.style.setProperty('display', 'inline-block', 'important');
+      } else {
+        // Fallback: if no name element found, style the <li> border instead
+        li.style.setProperty('border-left', '4px solid ' + s.color, 'important');
+        li.style.setProperty('background-color', s.bg, 'important');
       }
 
-      // Overdue: pulse the border
+      // Overdue: pulse the list item
       var overdue = data.followUpDate && (function() {
         var d = new Date(data.followUpDate + 'T00:00:00');
         var t = new Date(); t.setHours(0,0,0,0);
@@ -535,9 +530,6 @@ function checkCurrentThread() {
 
   if (threadId !== currentThreadId) {
     currentThreadId = threadId;
-
-    // Give LinkedIn time to render the contact name in the header
-    // Try immediately, then retry with longer delay if empty
     tryLoadContact(threadId, 0);
   }
 }
@@ -550,10 +542,8 @@ function tryLoadContact(threadId, attempt) {
     updateContactHeader(name, subtitle);
     loadAndPopulateSidebar(threadId);
   } else if (attempt < 5) {
-    // Retry with increasing delay until name is available
     setTimeout(function() { tryLoadContact(threadId, attempt + 1); }, 300 + attempt * 200);
   } else {
-    // Give up on name, still load sidebar data
     updateContactHeader('Contact', subtitle);
     loadAndPopulateSidebar(threadId);
   }
@@ -827,7 +817,6 @@ chrome.runtime.onMessage.addListener(function(msg, _sender, sendResponse) {
   }
 
   if (msg.type === 'SELECT_LINKEDIN_THREAD') {
-    // Click the thread row in the already-open inbox (no page reload)
     var link = document.querySelector('a[href*="/messaging/thread/' + msg.threadId + '"]');
     if (link) {
       link.click();
