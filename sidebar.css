@@ -554,6 +554,139 @@
 }
 #plcrm-open-kanban:hover { background: #F5F3FF; }
 
+/* ── Weekly analytics button ─────────────────────────────── */
+#plcrm-analytics-link {
+  padding: 0 14px 10px;
+}
+#plcrm-open-analytics {
+  width: 100%;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1D4ED8;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+#plcrm-open-analytics:hover { background: #DBEAFE; }
+
+/* ── Analytics modal ─────────────────────────────────────── */
+#plcrm-analytics-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  pointer-events: all;
+}
+.plcrm-modal-hidden {
+  display: none;
+}
+.plcrm-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 25, 35, 0.58);
+}
+.plcrm-modal-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+  padding: 16px;
+}
+.plcrm-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+#plcrm-analytics-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0F172A;
+}
+#plcrm-analytics-subtitle {
+  font-size: 12px;
+  color: #64748B;
+}
+#plcrm-analytics-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.plcrm-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.plcrm-analytics-card {
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #F8FAFC;
+  padding: 10px;
+}
+.plcrm-analytics-label {
+  font-size: 11px;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.plcrm-analytics-value {
+  margin-top: 5px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #0F172A;
+}
+.plcrm-analytics-block {
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+.plcrm-analytics-block-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+.plcrm-analytics-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plcrm-analytics-kv-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.plcrm-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.plcrm-analytics-k {
+  flex: 1;
+  color: #334155;
+}
+.plcrm-analytics-v {
+  color: #0F172A;
+  font-weight: 600;
+}
+.plcrm-muted {
+  font-size: 12px;
+  color: #94A3B8;
+}
+
 /* ── Contact info drawer ─────────────────────────────────── */
 #plcrm-contact-drawer {
   background: #F0F4F8;
