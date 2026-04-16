@@ -328,11 +328,29 @@ function buildSidebarHTML() {
 
         '<div id="plcrm-actions"><button id="plcrm-save-btn">Save</button></div>' +
 
+        '<div id="plcrm-analytics-link">' +
+          '<button id="plcrm-open-analytics">Weekly analytics</button>' +
+        '</div>' +
+
         '<div id="plcrm-kanban-link">' +
           '<button id="plcrm-open-kanban">Open full Kanban board \u2197</button>' +
         '</div>' +
 
         '<div id="plcrm-meta"></div>' +
+      '</div>' +
+
+      '<div id="plcrm-analytics-modal" class="plcrm-modal-hidden">' +
+        '<div class="plcrm-modal-backdrop"></div>' +
+        '<div class="plcrm-modal-card" role="dialog" aria-modal="true" aria-labelledby="plcrm-analytics-title">' +
+          '<div class="plcrm-modal-head">' +
+            '<div>' +
+              '<div id="plcrm-analytics-title">Weekly analytics</div>' +
+              '<div id="plcrm-analytics-subtitle"></div>' +
+            '</div>' +
+            '<button id="plcrm-close-analytics" class="plcrm-icon-btn" title="Close">\u2715</button>' +
+          '</div>' +
+          '<div id="plcrm-analytics-body"></div>' +
+        '</div>' +
       '</div>' +
     '</div>';
 }
@@ -387,6 +405,9 @@ function attachSidebarEvents() {
   document.getElementById('plcrm-file-input').addEventListener('change', handleFileAttach);
 
   document.getElementById('plcrm-save-btn').addEventListener('click', saveCurrentThread);
+  document.getElementById('plcrm-open-analytics').addEventListener('click', openWeeklyAnalyticsModal);
+  document.getElementById('plcrm-close-analytics').addEventListener('click', closeWeeklyAnalyticsModal);
+  document.querySelector('#plcrm-analytics-modal .plcrm-modal-backdrop').addEventListener('click', closeWeeklyAnalyticsModal);
   document.getElementById('plcrm-open-kanban').addEventListener('click', function() {
     chrome.runtime.sendMessage({ type: 'OPEN_KANBAN' });
   });
@@ -635,6 +656,154 @@ function updateMeta(ts) {
   if (!ts) { m.textContent = ''; return; }
   var d = new Date(ts);
   m.textContent = 'Saved ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+}
+
+// ─── Weekly Analytics ─────────────────────────────────────────────────────────
+
+function openWeeklyAnalyticsModal() {
+  var modal = document.getElementById('plcrm-analytics-modal');
+  if (!modal) return;
+  renderWeeklyAnalytics(function() {
+    modal.classList.remove('plcrm-modal-hidden');
+  });
+}
+
+function closeWeeklyAnalyticsModal() {
+  var modal = document.getElementById('plcrm-analytics-modal');
+  if (!modal) return;
+  modal.classList.add('plcrm-modal-hidden');
+}
+
+function renderWeeklyAnalytics(done) {
+  chrome.storage.local.get(['threads'], function(result) {
+    var threads = result.threads || {};
+    var allDeals = Object.keys(threads).map(function(threadId) {
+      return Object.assign({ threadId: threadId }, threads[threadId] || {});
+    });
+
+    var stats = computeWeeklyAnalytics(allDeals);
+    var subtitle = document.getElementById('plcrm-analytics-subtitle');
+    var body = document.getElementById('plcrm-analytics-body');
+
+    subtitle.textContent = 'Last 7 days · ' + new Date().toLocaleDateString();
+    body.innerHTML =
+      '<div class="plcrm-analytics-grid">' +
+        metricCardHTML('Active deals', stats.activeDeals) +
+        metricCardHTML('Follow-ups due', stats.followUpsDue) +
+        metricCardHTML('Overdue follow-ups', stats.overdueFollowUps) +
+        metricCardHTML('Deals moved', stats.dealsMovedThisWeek) +
+      '</div>' +
+      '<div class="plcrm-analytics-block">' +
+        '<div class="plcrm-analytics-block-title">Avg days in current stage</div>' +
+        '<div class="plcrm-analytics-kv">' + (stats.avgDaysByStageHTML || '<span class="plcrm-muted">No stage timing data yet.</span>') + '</div>' +
+      '</div>' +
+      '<div class="plcrm-analytics-block">' +
+        '<div class="plcrm-analytics-block-title">Pipeline distribution</div>' +
+        '<div class="plcrm-analytics-kv">' + (stats.distributionHTML || '<span class="plcrm-muted">No saved deals yet.</span>') + '</div>' +
+      '</div>';
+
+    if (done) done();
+  });
+}
+
+function metricCardHTML(label, value) {
+  return '<div class="plcrm-analytics-card">' +
+    '<div class="plcrm-analytics-label">' + label + '</div>' +
+    '<div class="plcrm-analytics-value">' + value + '</div>' +
+  '</div>';
+}
+
+function computeWeeklyAnalytics(deals) {
+  var now = new Date();
+  now.setHours(0, 0, 0, 0);
+  var weekAgoMs = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+
+  var activeDeals = 0;
+  var followUpsDue = 0;
+  var overdueFollowUps = 0;
+  var dealsMovedThisWeek = 0;
+  var stageCounts = {};
+  var stageDurations = {};
+
+  deals.forEach(function(deal) {
+    var stage = deal.stage || 'new';
+    stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+
+    if (stage !== 'won' && stage !== 'cold') activeDeals++;
+
+    if (deal.followUpDate) {
+      var followDate = new Date(deal.followUpDate + 'T00:00:00');
+      if (!Number.isNaN(followDate.getTime())) {
+        var diffDays = Math.round((followDate.getTime() - now.getTime()) / 86400000);
+        if (diffDays >= 0 && diffDays <= 7) followUpsDue++;
+        if (diffDays < 0) overdueFollowUps++;
+      }
+    }
+
+    var history = Array.isArray(deal.history) ? deal.history : [];
+    if (history.some(function(item) { return item && item.timestamp >= weekAgoMs; })) {
+      dealsMovedThisWeek++;
+    }
+
+    var stageEnteredAt = inferStageEnteredAt(deal);
+    if (stageEnteredAt) {
+      var daysInStage = Math.max(0, Math.floor((now.getTime() - stageEnteredAt) / 86400000));
+      if (!stageDurations[stage]) stageDurations[stage] = { total: 0, count: 0 };
+      stageDurations[stage].total += daysInStage;
+      stageDurations[stage].count += 1;
+    }
+  });
+
+  return {
+    activeDeals: activeDeals,
+    followUpsDue: followUpsDue,
+    overdueFollowUps: overdueFollowUps,
+    dealsMovedThisWeek: dealsMovedThisWeek,
+    avgDaysByStageHTML: buildAvgDaysByStageHTML(stageDurations),
+    distributionHTML: buildDistributionHTML(stageCounts, deals.length)
+  };
+}
+
+function inferStageEnteredAt(deal) {
+  var stage = deal.stage || 'new';
+  var history = Array.isArray(deal.history) ? deal.history.slice() : [];
+  history.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+  for (var i = history.length - 1; i >= 0; i--) {
+    var item = history[i];
+    if (item && item.to === stage && item.timestamp) return item.timestamp;
+  }
+  return deal.updatedAt || null;
+}
+
+function buildAvgDaysByStageHTML(stageDurations) {
+  var entries = Object.keys(stageDurations).map(function(stageId) {
+    var stageData = stageDurations[stageId];
+    var stageInfo = stageMap[stageId] || { label: stageId, color: '#64748B' };
+    var avg = stageData.count ? (stageData.total / stageData.count).toFixed(1) : '0.0';
+    return '<div class="plcrm-analytics-kv-row">' +
+      '<span class="plcrm-stage-dot" style="background:' + stageInfo.color + '"></span>' +
+      '<span class="plcrm-analytics-k">' + stageInfo.label + '</span>' +
+      '<span class="plcrm-analytics-v">' + avg + 'd</span>' +
+    '</div>';
+  });
+  return entries.join('');
+}
+
+function buildDistributionHTML(stageCounts, total) {
+  if (!total) return '';
+  var entries = Object.keys(stageCounts).sort(function(a, b) {
+    return (stageCounts[b] || 0) - (stageCounts[a] || 0);
+  }).map(function(stageId) {
+    var stageInfo = stageMap[stageId] || { label: stageId, color: '#64748B' };
+    var count = stageCounts[stageId];
+    var pct = Math.round((count / total) * 100);
+    return '<div class="plcrm-analytics-kv-row">' +
+      '<span class="plcrm-stage-dot" style="background:' + stageInfo.color + '"></span>' +
+      '<span class="plcrm-analytics-k">' + stageInfo.label + '</span>' +
+      '<span class="plcrm-analytics-v">' + count + ' (' + pct + '%)</span>' +
+    '</div>';
+  });
+  return entries.join('');
 }
 
 // ─── Alarms ───────────────────────────────────────────────────────────────────
