@@ -162,6 +162,10 @@ function updateInboxColors() {
                        link.querySelector('.msg-conversation-card__participant-names') ||
                        link.querySelector('[dir="ltr"]');
       if (prevNameEl) {
+        var existingPill = prevNameEl.querySelector('.plcrm-recipient-pill');
+        if (existingPill) {
+          prevNameEl.textContent = existingPill.textContent;
+        }
         prevNameEl.style.removeProperty('background-color');
         prevNameEl.style.removeProperty('color');
         prevNameEl.style.removeProperty('border-radius');
@@ -186,13 +190,22 @@ function updateInboxColors() {
                    link.querySelector('[dir="ltr"]');
 
       if (nameEl) {
-        nameEl.style.setProperty('background-color', s.color, 'important');
-        nameEl.style.setProperty('color', '#fff', 'important');
-        nameEl.style.setProperty('border-radius', '4px', 'important');
-        nameEl.style.setProperty('padding', '1px 6px', 'important');
-        nameEl.style.setProperty('display', 'inline-block', 'important');
+        var wrapped = nameEl.querySelector('.plcrm-recipient-pill');
+        if (!wrapped) {
+          var originalText = nameEl.textContent.trim();
+          nameEl.textContent = '';
+          wrapped = document.createElement('span');
+          wrapped.className = 'plcrm-recipient-pill';
+          wrapped.textContent = originalText;
+          nameEl.appendChild(wrapped);
+          console.log('[Pipeline CRM] Applied recipient pill wrapper for thread', threadId);
+        }
+        wrapped.style.setProperty('background-color', s.color, 'important');
+        wrapped.style.setProperty('color', '#fff', 'important');
+        wrapped.style.setProperty('border', '1px solid ' + s.color, 'important');
       } else {
         // Fallback: if no name element found, style the <li> border instead
+        console.log('[Pipeline CRM] Recipient name element not found, fallback list styling for thread', threadId);
         li.style.setProperty('border-left', '4px solid ' + s.color, 'important');
         li.style.setProperty('background-color', s.bg, 'important');
       }
@@ -324,7 +337,8 @@ function buildSidebarHTML() {
         '<div id="plcrm-actions"><button id="plcrm-save-btn">Save</button></div>' +
 
         '<div id="plcrm-analytics-link">' +
-          '<button id="plcrm-open-analytics">Weekly analytics</button>' +
+          '<button id="plcrm-open-analytics" class="plcrm-round-icon-btn" title="Weekly analytics" aria-label="Weekly analytics">\ud83d\udcca</button>' +
+          '<button id="plcrm-export-crm" class="plcrm-round-icon-btn" title="Download CRM CSV" aria-label="Download CRM CSV">\u2b73</button>' +
         '</div>' +
 
         '<div id="plcrm-kanban-link">' +
@@ -401,6 +415,7 @@ function attachSidebarEvents() {
 
   document.getElementById('plcrm-save-btn').addEventListener('click', saveCurrentThread);
   document.getElementById('plcrm-open-analytics').addEventListener('click', openWeeklyAnalyticsModal);
+  document.getElementById('plcrm-export-crm').addEventListener('click', exportDealsToCRM);
   document.getElementById('plcrm-close-analytics').addEventListener('click', closeWeeklyAnalyticsModal);
   document.querySelector('#plcrm-analytics-modal .plcrm-modal-backdrop').addEventListener('click', closeWeeklyAnalyticsModal);
   document.getElementById('plcrm-open-kanban').addEventListener('click', function() {
@@ -664,6 +679,109 @@ function closeWeeklyAnalyticsModal() {
   modal.classList.add('plcrm-modal-hidden');
 }
 
+function exportDealsToCRM() {
+  chrome.storage.local.get(['threads'], function(result) {
+    var threads = result.threads || {};
+    var records = Object.keys(threads).map(function(threadId) {
+      return Object.assign({ threadId: threadId }, threads[threadId] || {});
+    });
+    if (!records.length) {
+      console.log('[Pipeline CRM] Export blocked: no records to export.');
+      return;
+    }
+    var crm = window.prompt('Select CRM export format: hubspot, salesforce, or pipedrive', 'hubspot');
+    if (!crm) return;
+    var normalized = crm.trim().toLowerCase();
+    var csv = buildCRMCSV(normalized, records);
+    if (!csv) {
+      console.log('[Pipeline CRM] Unsupported CRM export format:', normalized);
+      return;
+    }
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'pipeline-' + normalized + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    console.log('[Pipeline CRM] Exported records for', normalized, 'count=', records.length);
+  });
+}
+
+function buildCRMCSV(crm, records) {
+  var mappers = {
+    hubspot: {
+      headers: ['First Name', 'Last Name', 'Email', 'Phone Number', 'Company', 'Lifecycle Stage', 'Notes', 'LinkedIn URL', 'Follow Up Date'],
+      row: function(deal) {
+        var splitName = splitFullName(deal.name);
+        return [
+          splitName.first,
+          splitName.last,
+          deal.email || '',
+          deal.phone || '',
+          deal.company || '',
+          (stageMap[deal.stage || 'new'] || {}).label || 'New Lead',
+          deal.notes || '',
+          deal.linkedin || '',
+          deal.followUpDate || ''
+        ];
+      }
+    },
+    salesforce: {
+      headers: ['FirstName', 'LastName', 'Email', 'Phone', 'Company', 'Lead Status', 'Description', 'LinkedIn_Profile__c', 'Follow_Up_Date__c'],
+      row: function(deal) {
+        var splitName = splitFullName(deal.name);
+        return [
+          splitName.first,
+          splitName.last || 'Unknown',
+          deal.email || '',
+          deal.phone || '',
+          deal.company || 'Unknown',
+          (stageMap[deal.stage || 'new'] || {}).label || 'New Lead',
+          deal.notes || '',
+          deal.linkedin || '',
+          deal.followUpDate || ''
+        ];
+      }
+    },
+    pipedrive: {
+      headers: ['name', 'organization_name', 'email', 'phone', 'label', 'note', 'linkedin_url', 'next_activity_date'],
+      row: function(deal) {
+        return [
+          deal.name || '',
+          deal.company || '',
+          deal.email || '',
+          deal.phone || '',
+          (stageMap[deal.stage || 'new'] || {}).label || 'New Lead',
+          deal.notes || '',
+          deal.linkedin || '',
+          deal.followUpDate || ''
+        ];
+      }
+    }
+  };
+
+  var mapper = mappers[crm];
+  if (!mapper) return '';
+  var lines = [mapper.headers.map(csvCell).join(',')];
+  records.forEach(function(deal) {
+    lines.push(mapper.row(deal).map(csvCell).join(','));
+  });
+  return lines.join('\n');
+}
+
+function splitFullName(name) {
+  var clean = (name || '').trim();
+  if (!clean) return { first: '', last: '' };
+  var bits = clean.split(/\s+/);
+  return { first: bits.shift() || '', last: bits.join(' ') };
+}
+
+function csvCell(value) {
+  var text = String(value == null ? '' : value).replace(/"/g, '""');
+  return '"' + text + '"';
+}
+
 function renderWeeklyAnalytics(done) {
   chrome.storage.local.get(['threads'], function(result) {
     var threads = result.threads || {};
@@ -831,6 +949,14 @@ chrome.runtime.onMessage.addListener(function(msg, _sender, sendResponse) {
 
   if (msg.type === 'OPEN_SIDEBAR_PANEL') {
     setSidebarOpen(true);
+    sendResponse({ ok: true });
+    return;
+  }
+
+  if (msg.type === 'REFRESH_FROM_SIDEBAR') {
+    console.log('[Pipeline CRM] Refresh requested from popup.');
+    checkCurrentThread();
+    updateInboxColors();
     sendResponse({ ok: true });
     return;
   }

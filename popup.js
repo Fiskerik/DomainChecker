@@ -18,6 +18,7 @@ let currentFilter = 'active';
 // ── Load Data ─────────────────────────────────────────────────────────────────
 
 function loadData() {
+  console.log('[Pipeline CRM popup] Loading deals from chrome.storage.local');
   chrome.storage.local.get(['threads'], (result) => {
     const raw = result.threads || {};
     allThreads = Object.entries(raw)
@@ -201,6 +202,42 @@ document.getElementById('pp-open-li').addEventListener('click', () => {
       // Not open — create a new tab
       chrome.tabs.create({ url: 'https://www.linkedin.com/messaging/' });
     }
+  });
+});
+
+function withLinkedInTab(cb) {
+  chrome.tabs.query({ url: 'https://www.linkedin.com/messaging/*' }, (tabs) => {
+    cb((tabs && tabs.length > 0) ? tabs[0] : null);
+  });
+}
+
+document.getElementById('pp-open-sidepanel').addEventListener('click', () => {
+  withLinkedInTab((tab) => {
+    if (!tab) {
+      chrome.runtime.sendMessage({ type: 'OPEN_LINKEDIN' });
+      return;
+    }
+    chrome.tabs.sendMessage(tab.id, { type: 'OPEN_SIDEBAR_PANEL' }, () => {
+      if (chrome.runtime.lastError) {
+        console.log('[Pipeline CRM popup] OPEN_SIDEBAR_PANEL direct send failed, fallback via background.', chrome.runtime.lastError.message);
+        chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR_PANEL' });
+      }
+    });
+  });
+});
+
+document.getElementById('pp-refresh-sidepanel').addEventListener('click', () => {
+  withLinkedInTab((tab) => {
+    if (!tab) {
+      loadData();
+      return;
+    }
+    chrome.tabs.sendMessage(tab.id, { type: 'REFRESH_FROM_SIDEBAR' }, (resp) => {
+      if (chrome.runtime.lastError || !resp || !resp.ok) {
+        console.log('[Pipeline CRM popup] REFRESH_FROM_SIDEBAR failed; reading storage directly.', chrome.runtime.lastError?.message || 'no response');
+      }
+      loadData();
+    });
   });
 });
 

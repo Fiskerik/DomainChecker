@@ -102,6 +102,25 @@ body {
   border-color: #BFDBFE;
 }
 
+.pp-icon-action {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid #E2E8F0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.pp-icon-action:hover {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #1D4ED8;
+}
+
 /* ── Overdue Banner ──────────────────────────────────────── */
 #pp-overdue-banner {
   background: #FEF2F2;
